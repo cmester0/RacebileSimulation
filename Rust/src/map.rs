@@ -1,15 +1,15 @@
+use crate::canvas_draw::*;
+use crate::player::*;
+use crate::util::*;
+use rand::seq::IndexedRandom;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::*;
 use std::cmp::{max, min};
 use std::collections::{BTreeMap, BTreeSet};
-use std::time::Duration;
-use rand::seq::IndexedRandom;
-use crate::canvas_draw::*;
 use std::ops::Add;
-use crate::util::*;
-use crate::player::*;
+use std::time::Duration;
 
 #[derive(Clone)]
 pub struct PlayerBuilder {
@@ -51,7 +51,7 @@ impl PlayerBuilder {
             gear: 1,
             stalled: true,
             roll: vec![], // Set by roll_dice
-            steps: 0, // Set by roll_dice
+            steps: 0,     // Set by roll_dice
             bonked: false,
             finished: false,
             forced_gear_down: false,
@@ -171,7 +171,55 @@ pub struct GameState {
     pub player_index: usize,
     pub rolling: bool,
     pub blockages: Vec<Coord>,
-    pub shortest_dist_map: BTreeMap<Coord, Vec<Direction>>
+    pub shortest_dist_map: BTreeMap<Coord, Vec<Direction>>,
+}
+
+pub struct BestStepStategy<'a> {
+    pub blockages: &'a Vec<Coord>,
+    pub shortest_dist_map: &'a BTreeMap<Coord, Vec<Direction>>,
+}
+
+impl<'a> StepStrategy for BestStepStategy<'a> {
+    fn step_strategy(
+        self,
+        turns: &Vec<Turn>,
+        dir: Direction,
+        pos: Coord,
+        _tile: &Tile,
+    ) -> Turn {
+        let best_dirs: Vec<Turn> = self.shortest_dist_map[&pos]
+            .clone()
+            .into_iter()
+            .filter_map(|d| dir.turn_to_dir(d))
+            .collect();
+        println!("best dirs {:?}", best_dirs);
+        if best_dirs.is_empty() {
+            if turns.is_empty() {
+                Turn::Straight
+            } else {
+                for t in turns {
+                    let next_pos = pos + (dir + *t).to_coord();
+                    if self.blockages.contains(&next_pos) {
+                        continue;
+                    }
+
+                    return *t;
+                }
+
+                turns[0]
+            }
+        } else {
+            best_dirs[0]
+        }
+    }
+}
+
+pub struct BestGearStrategy {}
+
+impl GearStrategy for BestGearStrategy {
+    fn gear_strategy(self, gear: u8) -> ChangeGear {
+        ChangeGear::Up
+    }
 }
 
 impl GameState {
@@ -192,56 +240,68 @@ impl GameState {
         }
     }
 
+    pub fn best_fun(
+        shortest_dist_map: &BTreeMap<Coord, Vec<Direction>>,
+        blockages: &Vec<Coord>,
+        turns: &Vec<Turn>,
+        dir: Direction,
+        pos: Coord,
+        _tile: &Tile,
+    ) -> Turn {
+        let best_dirs: Vec<Turn> = shortest_dist_map[&pos]
+            .clone()
+            .into_iter()
+            .filter_map(|d| dir.turn_to_dir(d))
+            .collect();
+        println!("best dirs {:?}", best_dirs);
+        if best_dirs.is_empty() {
+            if turns.is_empty() {
+                Turn::Straight
+            } else {
+                for t in turns {
+                    let next_pos = pos + (dir + *t).to_coord();
+                    if blockages.contains(&next_pos) {
+                        continue;
+                    }
+
+                    return *t;
+                }
+
+                turns[0]
+            }
+        } else {
+            best_dirs[0]
+        }
+    }
+
+    pub fn gear_up(gear: u8) -> ChangeGear {
+        ChangeGear::Up
+    }
+
     pub fn update_gameboard(&mut self) -> Vec<Coord> {
         let mut player_positions = vec![];
 
         let mut blockages = vec![];
         for p in &self.players {
-            if player_positions.contains(&p.position) || self.map.tiles.contains_key(&p.position) && self.map.tiles[&p.position].chikane {
+            if player_positions.contains(&p.position)
+                || self.map.tiles.contains_key(&p.position) && self.map.tiles[&p.position].chikane
+            {
                 blockages.push(p.position);
             }
             player_positions.push(p.position);
         }
 
         blockages
-
     }
 
     pub fn step_game(&mut self) -> bool {
         let p = &mut self.players[self.player_index];
 
         if self.rolling {
-            p.roll_dice(|_gear| {
-                ChangeGear::Up // Always gear up
-            });
+            p.roll_dice(BestGearStrategy {});
             self.rolling = false;
         } else {
-            p.step(&self.map.tiles, &self.blockages, |turns, dir, pos, _tile| {
-                let best_dirs: Vec<Turn> = self.shortest_dist_map[&pos]
-                    .clone()
-                    .into_iter()
-                    .filter_map(|d| dir.turn_to_dir(d))
-                    .collect();
-                println!("best dirs {:?}", best_dirs);
-                if best_dirs.is_empty() {
-                    if turns.is_empty() {
-                        Turn::Straight
-                    } else {
-                        for t in turns {
-                            let next_pos = pos + (dir + *t).to_coord();
-                            if self.blockages.contains(&next_pos) {
-                                continue;
-                            }
-
-                            return *t;
-                        }
-
-                        turns[0]
-                    }
-                } else {
-                    best_dirs[0]
-                }
-            });
+            p.step(&self.map.tiles, &self.blockages, BestStepStategy { shortest_dist_map: &self.shortest_dist_map, blockages: &self.blockages });
 
             if p.finished {
                 if self.map.tiles.contains_key(&p.position) && self.map.tiles[&p.position].blue {
@@ -318,16 +378,12 @@ impl GameState {
                             p.draw(&mut canvas, start, scale);
                         }
 
-                        let mut laps = 0;
-                        while laps < 5000 || self.player_index != 0 {
-                            if self.player_index == 0 {
-                                laps += 1;
-                            }
-
-                            while !self.step_game() {
-                                self.players[self.player_index].draw(&mut canvas, start, scale);
-                            };
+                        while !self.step_game() {
+                            self.players[self.player_index].draw(&mut canvas, start, scale);
                         }
+                        self.players
+                            [(self.player_index + self.players.len() - 1) % self.players.len()]
+                        .draw(&mut canvas, start, scale);
                     }
                     _ => {}
                 }
@@ -335,8 +391,6 @@ impl GameState {
 
             canvas.present();
             ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
-
-
         }
     }
 }

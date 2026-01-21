@@ -35,6 +35,13 @@ pub struct Player {
     pub forced_gear_down: bool,
 }
 
+pub trait StepStrategy {
+    fn step_strategy(self, turns: &Vec<Turn>, dir: Direction, pos: Coord, tile: &Tile) -> Turn;
+}
+pub trait GearStrategy {
+    fn gear_strategy(self, gear: u8) -> ChangeGear;
+}
+
 impl Player {
     pub fn draw(&self, canvas: &mut Canvas<Window>, start: Coord, scale: f64) {
         let c = start + self.position * (scale as i32);
@@ -88,7 +95,7 @@ impl Player {
             .collect()
     }
 
-    pub fn step<F: Fn(&Vec<Turn>, Direction, Coord, &Tile) -> Turn>(
+    pub fn step<F: StepStrategy>(
         &mut self,
         tiles: &BTreeMap<Coord, Tile>,
         blockages: &Vec<Coord>,
@@ -122,16 +129,6 @@ impl Player {
             return;
         }
 
-        // .filter_map(|x| {
-        //     let dir_pos = self.position + x.to_coord();
-        //     println!("Blockage {:?} contains {:?}?: {:?}", blockages, dir_pos, blockages.contains(&dir_pos));
-        //     if blockages.contains(&dir_pos) {
-        //         None
-        //     } else {
-        //         Some(x)
-        //     }
-        // })
-
         // Outside bord
         if !tiles.contains_key(&self.position) {
             self.outside_board = true;
@@ -143,7 +140,7 @@ impl Player {
         let turns = self.step_possibilities(tiles, blockages);
 
         let curr_tile = tiles[&self.position].clone();
-        let mut turn = strategy(&turns, self.direction, self.position, &curr_tile);
+        let mut turn = strategy.step_strategy(&turns, self.direction, self.position, &curr_tile);
 
         if (!curr_tile.forced.is_empty() || self.roll.iter().fold(0, u8::add) > 9)
             && !turns.contains(&turn)
@@ -157,10 +154,6 @@ impl Player {
             }
         };
 
-        // if !turns.contains(&turn) {
-        //     panic!("invalid turn");
-        // }
-
         self.direction = self.direction + turn;
         self.steps += 1;
         // TODO: Allow player to call finished steps themselves
@@ -169,7 +162,7 @@ impl Player {
         }
     }
 
-    pub fn roll_dice<F: Fn(u8) -> ChangeGear>(&mut self, strategy: F) {
+    pub fn roll_dice<F: GearStrategy>(&mut self, strategy: F) {
         self.finished = false;
 
         if self.stalled {
@@ -179,7 +172,7 @@ impl Player {
             self.gear = ChangeGear::Down.update_gear(self.gear);
             self.forced_gear_down = false;
         } else {
-            self.gear = strategy(self.gear).update_gear(self.gear);
+            self.gear = strategy.gear_strategy(self.gear).update_gear(self.gear);
         }
 
         let dice_dist: Vec<_> = (1..=4_u8).into_iter().collect();
