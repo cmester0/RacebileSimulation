@@ -181,7 +181,7 @@ pub struct BestStepStategy<'a> {
 
 impl<'a> StepStrategy for BestStepStategy<'a> {
     fn step_strategy(
-        self,
+        &mut self,
         turns: &Vec<Turn>,
         dir: Direction,
         pos: Coord,
@@ -217,10 +217,118 @@ impl<'a> StepStrategy for BestStepStategy<'a> {
 pub struct BestGearStrategy {}
 
 impl GearStrategy for BestGearStrategy {
-    fn gear_strategy(self, gear: u8) -> ChangeGear {
+    fn gear_strategy(&mut self, gear: u8) -> ChangeGear {
         ChangeGear::Up
     }
 }
+
+
+pub struct ManualStrategy<'a> {event_pump: &'a mut EventPump}
+impl<'a> GearStrategy for ManualStrategy<'a> {
+    fn gear_strategy(&mut self, gear: u8) -> ChangeGear {
+        let mut gear_change = ChangeGear::Up;
+        println!("Gear {:?}, Gear change: {:?}", gear, gear_change);
+
+        'selection: loop {
+            for event in self.event_pump.poll_iter() {
+                match event {
+                    Event::Quit { .. }
+                    | Event::KeyDown {
+                        keycode: Some(Keycode::Escape),
+                        ..
+                    } => panic!(),
+                    Event::KeyDown {
+                        keycode: Some(Keycode::S),
+                        ..
+                    } => {
+                        gear_change = match gear_change {
+                            ChangeGear::Up => ChangeGear::Stay,
+                            _ => ChangeGear::Down
+                        };
+                        println!("Gear {:?}, Gear change: {:?}", gear, gear_change);
+                    }
+                    Event::KeyDown {
+                        keycode: Some(Keycode::W),
+                        ..
+                    } => {
+                        gear_change = match gear_change {
+                            ChangeGear::Down => ChangeGear::Stay,
+                            _ => ChangeGear::Up
+                        };
+                        println!("Gear {:?}, Gear change: {:?}", gear, gear_change);
+                    }
+                    Event::KeyDown {
+                        keycode: Some(Keycode::SPACE),
+                        ..
+                    } => {
+                        println!("Enter pressed?");
+                        break 'selection;
+                    }
+                    _ => {}
+                }
+            }
+
+            ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+        }
+        gear_change
+    }
+}
+
+impl<'a> StepStrategy for ManualStrategy<'a> {
+    fn step_strategy(
+        &mut self,
+        turns: &Vec<Turn>,
+        dir: Direction,
+        pos: Coord,
+        _tile: &Tile,
+    ) -> Turn {
+        let mut turn = Turn::Straight;
+        println!("Turn {:?}", turn);
+
+        'selection: loop {
+            for event in self.event_pump.poll_iter() {
+                match event {
+                    Event::Quit { .. }
+                    | Event::KeyDown {
+                        keycode: Some(Keycode::Escape),
+                        ..
+                    } => panic!(),
+                    Event::KeyDown {
+                        keycode: Some(Keycode::A),
+                        ..
+                    } => {
+                        turn = match turn {
+                            Turn::Right => Turn::Straight,
+                            _ => Turn::Left
+                        };
+                        println!("Turn {:?}", turn);
+                    }
+                    Event::KeyDown {
+                        keycode: Some(Keycode::D),
+                        ..
+                    } => {
+                        turn = match turn {
+                            Turn::Left => Turn::Straight,
+                            _ => Turn::Right
+                        };
+                        println!("Turn {:?}", turn);
+                    }
+                    Event::KeyDown {
+                        keycode: Some(Keycode::SPACE),
+                        ..
+                    } => {
+                        println!("Enter pressed?");
+                        break 'selection;
+                    }
+                    _ => {}
+                }
+            }
+            ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+        }
+        turn
+    }
+}
+
 
 impl GameState {
     pub fn new(map: HexMap) -> Self {
@@ -294,14 +402,16 @@ impl GameState {
         blockages
     }
 
-    pub fn step_game(&mut self) -> bool {
+    pub fn step_game(&mut self, event_pump: &mut EventPump) -> bool {
         let p = &mut self.players[self.player_index];
 
         if self.rolling {
-            p.roll_dice(BestGearStrategy {});
+            // p.roll_dice(BestGearStrategy {});
+            p.roll_dice(ManualStrategy { event_pump: event_pump });
             self.rolling = false;
         } else {
-            p.step(&self.map.tiles, &self.blockages, BestStepStategy { shortest_dist_map: &self.shortest_dist_map, blockages: &self.blockages });
+            // p.step(&self.map.tiles, &self.blockages, BestStepStategy { shortest_dist_map: &self.shortest_dist_map, blockages: &self.blockages });
+            p.step(&self.map.tiles, &self.blockages, ManualStrategy { event_pump: event_pump });
 
             if p.finished {
                 if self.map.tiles.contains_key(&p.position) && self.map.tiles[&p.position].blue {
@@ -358,9 +468,9 @@ impl GameState {
             p.draw(&mut canvas, start, scale);
         }
         canvas.present();
-        ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
 
         'game: loop {
+            let mut step_game = false;
             for event in event_pump.poll_iter() {
                 match event {
                     Event::Quit { .. }
@@ -372,21 +482,24 @@ impl GameState {
                         keycode: Some(Keycode::Space),
                         ..
                     } => {
-                        self.map.draw(&mut canvas, start, scale);
-
-                        for p in &self.players {
-                            p.draw(&mut canvas, start, scale);
-                        }
-
-                        while !self.step_game() {
-                            self.players[self.player_index].draw(&mut canvas, start, scale);
-                        }
-                        self.players
-                            [(self.player_index + self.players.len() - 1) % self.players.len()]
-                        .draw(&mut canvas, start, scale);
+                        step_game = true;
                     }
                     _ => {}
                 }
+            }
+
+            for p in &self.players {
+                p.draw(&mut canvas, start, scale);
+            }
+
+            if step_game {
+                self.step_game(&mut event_pump);
+            }
+
+            self.map.draw(&mut canvas, start, scale);
+
+            for p in &self.players {
+                p.draw(&mut canvas, start, scale);
             }
 
             canvas.present();

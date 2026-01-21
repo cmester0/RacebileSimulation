@@ -36,10 +36,10 @@ pub struct Player {
 }
 
 pub trait StepStrategy {
-    fn step_strategy(self, turns: &Vec<Turn>, dir: Direction, pos: Coord, tile: &Tile) -> Turn;
+    fn step_strategy(&mut self, turns: &Vec<Turn>, dir: Direction, pos: Coord, tile: &Tile) -> Turn;
 }
 pub trait GearStrategy {
-    fn gear_strategy(self, gear: u8) -> ChangeGear;
+    fn gear_strategy(&mut self, gear: u8) -> ChangeGear;
 }
 
 impl Player {
@@ -99,7 +99,7 @@ impl Player {
         &mut self,
         tiles: &BTreeMap<Coord, Tile>,
         blockages: &Vec<Coord>,
-        strategy: F,
+        mut strategy: F,
     ) {
         if self.next_falls_off {
             self.old_position = self.position;
@@ -162,7 +162,7 @@ impl Player {
         }
     }
 
-    pub fn roll_dice<F: GearStrategy>(&mut self, strategy: F) {
+    pub fn roll_dice<F: GearStrategy>(&mut self, mut strategy: F) {
         self.finished = false;
 
         if self.stalled {
