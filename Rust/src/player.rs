@@ -72,6 +72,11 @@ impl Player {
         let curr_tile = tiles[&self.position].clone();
         let dir = if !curr_tile.forced.is_empty() {
             println!("Bug??: {:?} {:?} {:?}", curr_tile.forced, self.position, self.old_position);
+
+            // best dirs [Right, Straight, Straight, Right]
+            // ITER
+            // Bug??: {Coord { q: -2, r: -6 }: DL, Coord { q: -1, r: -5 }: UL} Coord { q: -2, r: -5 } Coord { q: -3, r: -4 }
+
             vec![curr_tile.forced[&self.old_position]] // Old position need not be there?
         } else {
             curr_tile.directions
@@ -103,7 +108,8 @@ impl Player {
             self.outside_board = false;
             self.position = self.old_position;
             self.old_position = self.position;
-            self.direction = tiles[&self.position].directions[0];
+            self.direction = tiles[&self.position].directions[0]; // TODO: allow stategy when re-entering the board
+            return;
         } else {
             self.old_position = self.position;
             self.position = self.position + self.direction.to_coord();

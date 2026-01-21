@@ -98,7 +98,7 @@ impl HexMap {
         let mut visited: BTreeSet<(Coord, Direction)> = BTreeSet::new();
         let mut index = 0;
         while index < stk.len() {
-            let ((c, d), _, _) = stk[index];
+            let ((c, d), (nc, _), _) = stk[index];
             index += 1;
 
             if visited.contains(&(c, d)) {
@@ -207,7 +207,7 @@ impl GameState {
 
     }
 
-    pub fn step_game(&mut self) {
+    pub fn step_game(&mut self) -> bool {
         let p = &mut self.players[self.player_index];
 
         if self.rolling {
@@ -227,6 +227,15 @@ impl GameState {
                     if turns.is_empty() {
                         Turn::Straight
                     } else {
+                        for t in turns {
+                            let next_pos = pos + (dir + *t).to_coord();
+                            if self.blockages.contains(&next_pos) {
+                                continue;
+                            }
+
+                            return *t;
+                        }
+
                         turns[0]
                     }
                 } else {
@@ -241,9 +250,13 @@ impl GameState {
 
                 self.rolling = true;
                 self.player_index = (self.player_index + 1) % self.players.len();
-                self.blockages = self.update_gameboard()
+                self.blockages = self.update_gameboard();
+
+                return true;
             }
         }
+
+        return false;
     }
 
     pub fn display(&mut self) {
@@ -277,24 +290,17 @@ impl GameState {
 
         let mut event_pump = sdl_context.event_pump().unwrap();
 
+        self.blockages = self.update_gameboard();
         self.shortest_dist_map = self.map.shortest_path();
 
-        self.blockages = self.update_gameboard();
-
-        let mut rng = rand::rng();
+        self.map.draw(&mut canvas, start, scale);
+        for p in &self.players {
+            p.draw(&mut canvas, start, scale);
+        }
+        canvas.present();
+        ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
 
         'game: loop {
-            self.map.draw(&mut canvas, start, scale);
-
-            for p in &self.players {
-                p.draw(&mut canvas, start, scale);
-            }
-
-
-            
-            // rand_distr::Geometric
-            // sips["gas"] = sum(geom.rvs(2/3,size=ng))-ng
-
             for event in event_pump.poll_iter() {
                 match event {
                     Event::Quit { .. }
@@ -306,7 +312,22 @@ impl GameState {
                         keycode: Some(Keycode::Space),
                         ..
                     } => {
-                        self.step_game();
+                        self.map.draw(&mut canvas, start, scale);
+
+                        for p in &self.players {
+                            p.draw(&mut canvas, start, scale);
+                        }
+
+                        let mut laps = 0;
+                        while laps < 5000 || self.player_index != 0 {
+                            if self.player_index == 0 {
+                                laps += 1;
+                            }
+
+                            while !self.step_game() {
+                                self.players[self.player_index].draw(&mut canvas, start, scale);
+                            };
+                        }
                     }
                     _ => {}
                 }
@@ -314,6 +335,8 @@ impl GameState {
 
             canvas.present();
             ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+
+
         }
     }
 }
