@@ -1,8 +1,12 @@
 pub mod game;
 pub mod map;
+pub mod util;
+pub mod canvas_draw;
+pub mod player;
 
 use crate::map::*;
-use crate::Direction::*;
+use crate::util::Direction::*;
+use crate::util::*;
 
 use sdl2::pixels::Color;
 use std::collections::BTreeMap;
@@ -88,75 +92,30 @@ fn main() {
             (Coord::tri(2, -5, 0), vec![UL]),
             (Coord::tri(2, -6, 0), vec![DL]),
         ],
-        players: vec![
-            Player {
-                position: Coord::tri(3, 0, 0),
-                old_position: Coord::tri(3, 0, 0),
-                direction: DR,
-                color: Color::RGB(255, 0, 0),
-                radius: 0.2,
-                outside_board: false,
-            },
-            Player {
-                position: Coord::tri(3, 0, 1),
-                old_position: Coord::tri(3, 0, 1),
-                direction: DR,
-                color: Color::RGB(0, 0, 255),
-                radius: 0.3,
-                outside_board: false,
-            },
-            Player {
-                position: Coord::tri(2, 0, 0),
-                old_position: Coord::tri(2, 0, 0),
-                direction: DR,
-                color: Color::RGB(0, 255, 0),
-                radius: 0.4,
-                outside_board: false,
-            },
-            Player {
-                position: Coord::tri(2, 0, 1),
-                old_position: Coord::tri(2, 0, 1),
-                direction: DR,
-                color: Color::RGB(255, 255, 0),
-                radius: 0.5,
-                outside_board: false,
-            },
-            Player {
-                position: Coord::tri(1, 0, 0),
-                old_position: Coord::tri(1, 0, 0),
-                direction: DR,
-                color: Color::RGB(255, 0, 255),
-                radius: 0.6,
-                outside_board: false,
-            },
-            Player {
-                position: Coord::tri(1, 0, 1),
-                old_position: Coord::tri(1, 0, 1),
-                direction: DR,
-                color: Color::RGB(0, 255, 255),
-                radius: 0.7,
-                outside_board: false,
-            },
-            Player {
-                position: Coord::tri(0, 0, 0),
-                old_position: Coord::tri(0, 0, 0),
-                direction: DR,
-                color: Color::RGB(255, 100, 100),
-                radius: 0.8,
-                outside_board: false,
-            },
-            Player {
-                position: Coord::tri(0, 0, 1),
-                old_position: Coord::tri(0, 0, 1),
-                direction: DR,
-                color: Color::RGB(100, 100, 255),
-                radius: 0.9,
-                outside_board: false,
-            },
-        ],
+        player_builder: PlayerBuilder::new(
+            8,
+            vec![
+                Color::RGB(255, 0, 0),
+                Color::RGB(0, 0, 255),
+                Color::RGB(0, 255, 0),
+                Color::RGB(255, 255, 0),
+                Color::RGB(255, 0, 255),
+                Color::RGB(0, 255, 255),
+                Color::RGB(255, 100, 100),
+                Color::RGB(100, 100, 255),
+            ],
+            vec![
+                (Coord::tri(3, 0, 0), DR),
+                (Coord::tri(3, 0, 1), DR),
+                (Coord::tri(2, 0, 0), DR),
+                (Coord::tri(2, 0, 1), DR),
+                (Coord::tri(1, 0, 0), DR),
+                (Coord::tri(1, 0, 1), DR),
+                (Coord::tri(0, 0, 0), DR),
+                (Coord::tri(0, 0, 1), DR),
+            ],
+        ),
     };
 
-    rtfm.display();
-
-    println!("Hello, world!");
+    GameState::new(rtfm).display();
 }
