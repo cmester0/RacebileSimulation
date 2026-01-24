@@ -117,5 +117,5 @@ fn main() {
         ),
     };
 
-    GameState::new(rtfm).display();
+    GameState::new(rtfm); // .display();
 }

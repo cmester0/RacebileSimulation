@@ -12,58 +12,102 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Add;
 use std::time::Duration;
 
+pub struct GeneralError {}
+
+pub struct TechnicalError {
+    // Move bottle cap on the side (two wheels required)
+}
+
+pub struct Sips {
+    pub start_last: bool,
+    pub end_first: bool,
+    pub whines: u8,
+    pub remaining_steps: u8,
+    pub fell_out: bool,
+    pub back_on: bool,
+    pub ones: u8, // Hån - ridicule
+}
+
+impl Default for Sips {
+    fn default() -> Sips {
+        Sips {
+            start_last: false,
+            end_first: false,
+            whines: 0,
+            remaining_steps: 0,
+            fell_out: false,
+            back_on: false,
+            ones: 0,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Player {
     pub color: Color,
     pub radius: f64,
-
     pub position: Coord,
     pub old_position: Coord,
     pub direction: Direction,
 
     pub outside_board: bool,
+    pub next_falls_off: bool,
+    pub forced_gear_down: bool,
+
     pub gear: u8,
+
     pub roll: Vec<u8>,
     pub steps: u8,
     pub stalled: bool,
 
     pub bonked: bool,
     pub finished: bool,
-
-    pub next_falls_off: bool,
-
-    pub forced_gear_down: bool,
 }
 
 pub trait StepStrategy {
-    fn step_strategy(&mut self, turns: &Vec<Turn>, dir: Direction, pos: Coord, tile: &Tile) -> Turn;
+    fn step_strategy(&mut self, player: &Player, turns: &Vec<Turn>, tile: &Tile) -> Option<Turn>;
 }
+
 pub trait GearStrategy {
-    fn gear_strategy(&mut self, gear: u8) -> ChangeGear;
+    fn gear_strategy(&mut self, player: &Player) -> ChangeGear;
 }
 
 impl Player {
+    // pub fn reset(&mut self) {
+    //     self.stalled = false;
+    //     // pub roll: Vec<u8>,
+    //     // pub steps: u8,
+    //     // pub stalled: bool,
+
+    //     // pub bonked: bool,
+    //     // pub finished: bool,
+
+    // }
+
     pub fn draw(&self, canvas: &mut Canvas<Window>, start: Coord, scale: f64) {
         let c = start + self.position * (scale as i32);
         canvas.set_draw_color(self.color);
 
-        let _ = draw_hexagon(canvas, c.x(), c.y(), scale * self.radius);
-        let _ = draw_hexagon(canvas, c.x() + 1, c.y(), scale * self.radius);
-        let _ = draw_hexagon(canvas, c.x() + 1, c.y() + 1, scale * self.radius);
+        for i in -1..=1 {
+            for j in -1..=1 {
+                let _ = draw_hexagon(canvas, c.x() + i, c.y() + j, scale * self.radius);
+            }
+        }
 
-        let _ = draw_hexagon(canvas, c.x(), c.y(), 0.5 * scale * self.radius);
-        let _ = draw_hexagon(canvas, c.x() + 1, c.y(), 0.5 * scale * self.radius);
-        let _ = draw_hexagon(canvas, c.x() + 1, c.y() + 1, 0.5 * scale * self.radius);
+        for i in -1..=1 {
+            for j in -1..=1 {
+                let _ = draw_hexagon(canvas, c.x() + i, c.y() + j, 0.5 * scale * self.radius);
+            }
+        }
 
         let angle = self.direction.angle();
         let cx = c.x() + (0.85 * scale / 2_f64.sqrt() * angle.cos()) as i32;
         let cy = c.y() + (0.85 * scale / 2_f64.sqrt() * angle.sin()) as i32;
 
         for i in -1..=1 {
-            let _ = canvas.draw_line((c.x() + i, c.y()), (cx + i, cy));
-        }
-        for i in -1..=1 {
-            let _ = canvas.draw_line((c.x(), c.y() + i), (cx, cy + i));
+            for j in -1..=1 {
+                let _ = canvas.draw_line((c.x() + i, c.y() + j), (cx + i, cy + j));
+            }
         }
     }
 
@@ -78,7 +122,10 @@ impl Player {
 
         let curr_tile = tiles[&self.position].clone();
         let dir = if !curr_tile.forced.is_empty() {
-            println!("Bug??: {:?} {:?} {:?}", curr_tile.forced, self.position, self.old_position);
+            println!(
+                "Bug??: {:?} {:?} {:?}",
+                curr_tile.forced, self.position, self.old_position
+            );
 
             // best dirs [Right, Straight, Straight, Right]
             // ITER
@@ -95,12 +142,11 @@ impl Player {
             .collect()
     }
 
-    pub fn step<F: StepStrategy>(
+    pub fn pre_step(
         &mut self,
         tiles: &BTreeMap<Coord, Tile>,
         blockages: &Vec<Coord>,
-        mut strategy: F,
-    ) {
+    ) -> Option<Vec<Turn>> {
         if self.next_falls_off {
             self.old_position = self.position;
             self.position = self.position + self.direction.to_coord();
@@ -110,13 +156,13 @@ impl Player {
             self.stalled = true;
             self.next_falls_off = false;
 
-            return;
+            return None; // Done
         } else if self.outside_board {
             self.outside_board = false;
             self.position = self.old_position;
             self.old_position = self.position;
             self.direction = tiles[&self.position].directions[0]; // TODO: allow stategy when re-entering the board
-            return;
+            return None; // Done
         } else {
             self.old_position = self.position;
             self.position = self.position + self.direction.to_coord();
@@ -126,7 +172,7 @@ impl Player {
             self.position = self.old_position;
             self.finished = true;
             self.bonked = true;
-            return;
+            return None; // Done
         }
 
         // Outside bord
@@ -134,13 +180,22 @@ impl Player {
             self.outside_board = true;
             self.finished = true;
             self.stalled = true;
-            return;
+            return None;
         }
 
-        let turns = self.step_possibilities(tiles, blockages);
+        Some(self.step_possibilities(tiles, blockages))
+    }
 
+    pub fn step<F: StepStrategy>(
+        &mut self,
+        turns: &Vec<Turn>,
+        tiles: &BTreeMap<Coord, Tile>,
+        strategy: &mut F,
+    ) -> bool {
         let curr_tile = tiles[&self.position].clone();
-        let mut turn = strategy.step_strategy(&turns, self.direction, self.position, &curr_tile);
+        let Some(mut turn) = strategy.step_strategy(self, &turns, &curr_tile) else {
+            return false;
+        };
 
         if (!curr_tile.forced.is_empty() || self.roll.iter().fold(0, u8::add) > 9)
             && !turns.contains(&turn)
@@ -160,6 +215,8 @@ impl Player {
         if self.steps == self.roll.iter().fold(0, u8::add) {
             self.finished = true;
         }
+
+        return true;
     }
 
     pub fn roll_dice<F: GearStrategy>(&mut self, mut strategy: F) {
@@ -172,7 +229,7 @@ impl Player {
             self.gear = ChangeGear::Down.update_gear(self.gear);
             self.forced_gear_down = false;
         } else {
-            self.gear = strategy.gear_strategy(self.gear).update_gear(self.gear);
+            self.gear = strategy.gear_strategy(&self).update_gear(self.gear);
         }
 
         let dice_dist: Vec<_> = (1..=4_u8).into_iter().collect();
@@ -183,4 +240,7 @@ impl Player {
         self.steps = 0; // self.roll.iter().fold(0, u8::add);
         println!("Roll: {:?}", self.roll);
     }
+
+    // nøl - hesitation / dither
+    pub fn dither() {}
 }

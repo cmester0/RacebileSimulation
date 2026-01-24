@@ -216,9 +216,12 @@ impl Tile {
         }
 
         canvas.set_draw_color(Color::RGB(255, 255, 255));
-        draw_hexagon(canvas, c.x(), c.y(), scale);
-        draw_hexagon(canvas, c.x() + 1, c.y(), scale);
-        draw_hexagon(canvas, c.x() + 1, c.y() + 1, scale);
+        for i in -1..=1 {
+            draw_hexagon(canvas, c.x()+i, c.y(), scale);
+        }
+        for i in -1..=1 {
+            draw_hexagon(canvas, c.x(), c.y()+i, scale);
+        }
     }
 }
 

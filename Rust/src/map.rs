@@ -145,9 +145,11 @@ impl HexMap {
             let c = start + *c * (scale as i32);
             for d in dirs {
                 canvas.set_draw_color(Color::RGB(255, 0, 255));
-                let _ = draw_hexagon_side(canvas, c.x(), c.y(), scale, *d);
-                let _ = draw_hexagon_side(canvas, c.x() + 1, c.y(), scale, *d);
-                let _ = draw_hexagon_side(canvas, c.x() + 1, c.y() + 1, scale, *d);
+                for i in -1..=1 {
+                    for j in -1..=1 {
+                        let _ = draw_hexagon_side(canvas, c.x() + i, c.y() + j, scale, *d);
+                    }
+                }
             }
         }
 
@@ -165,13 +167,17 @@ impl HexMap {
     }
 }
 
-pub struct GameState {
+pub struct GameState<'a> {
     pub map: HexMap,
     pub players: Vec<Player>,
     pub player_index: usize,
     pub rolling: bool,
     pub blockages: Vec<Coord>,
     pub shortest_dist_map: BTreeMap<Coord, Vec<Direction>>,
+
+    pub start: Coord,
+    pub scale: f64,
+    pub canvas: &'a mut Canvas<Window>,
 }
 
 pub struct BestStepStategy<'a> {
@@ -180,20 +186,17 @@ pub struct BestStepStategy<'a> {
 }
 
 impl<'a> StepStrategy for BestStepStategy<'a> {
-    fn step_strategy(
-        &mut self,
-        turns: &Vec<Turn>,
-        dir: Direction,
-        pos: Coord,
-        _tile: &Tile,
-    ) -> Turn {
+    fn step_strategy(&mut self, player: &Player, turns: &Vec<Turn>, _tile: &Tile) -> Option<Turn> {
+        let dir: Direction = player.direction;
+        let pos: Coord = player.position;
+
         let best_dirs: Vec<Turn> = self.shortest_dist_map[&pos]
             .clone()
             .into_iter()
             .filter_map(|d| dir.turn_to_dir(d))
             .collect();
         println!("best dirs {:?}", best_dirs);
-        if best_dirs.is_empty() {
+        Some(if best_dirs.is_empty() {
             if turns.is_empty() {
                 Turn::Straight
             } else {
@@ -203,29 +206,33 @@ impl<'a> StepStrategy for BestStepStategy<'a> {
                         continue;
                     }
 
-                    return *t;
+                    return Some(*t)
                 }
 
                 turns[0]
             }
         } else {
             best_dirs[0]
-        }
+        })
     }
 }
 
 pub struct BestGearStrategy {}
 
 impl GearStrategy for BestGearStrategy {
-    fn gear_strategy(&mut self, gear: u8) -> ChangeGear {
+    fn gear_strategy(&mut self, _: &Player) -> ChangeGear {
         ChangeGear::Up
     }
 }
 
+pub struct ManualStrategy<'a> {
+    turn: Turn,
+    event_pump: &'a mut EventPump,
+}
 
-pub struct ManualStrategy<'a> {event_pump: &'a mut EventPump}
 impl<'a> GearStrategy for ManualStrategy<'a> {
-    fn gear_strategy(&mut self, gear: u8) -> ChangeGear {
+    fn gear_strategy(&mut self, player: &Player) -> ChangeGear {
+        let gear = player.gear;
         let mut gear_change = ChangeGear::Up;
         println!("Gear {:?}, Gear change: {:?}", gear, gear_change);
 
@@ -243,7 +250,7 @@ impl<'a> GearStrategy for ManualStrategy<'a> {
                     } => {
                         gear_change = match gear_change {
                             ChangeGear::Up => ChangeGear::Stay,
-                            _ => ChangeGear::Down
+                            _ => ChangeGear::Down,
                         };
                         println!("Gear {:?}, Gear change: {:?}", gear, gear_change);
                     }
@@ -253,7 +260,7 @@ impl<'a> GearStrategy for ManualStrategy<'a> {
                     } => {
                         gear_change = match gear_change {
                             ChangeGear::Down => ChangeGear::Stay,
-                            _ => ChangeGear::Up
+                            _ => ChangeGear::Up,
                         };
                         println!("Gear {:?}, Gear change: {:?}", gear, gear_change);
                     }
@@ -275,77 +282,106 @@ impl<'a> GearStrategy for ManualStrategy<'a> {
 }
 
 impl<'a> StepStrategy for ManualStrategy<'a> {
-    fn step_strategy(
-        &mut self,
-        turns: &Vec<Turn>,
-        dir: Direction,
-        pos: Coord,
-        _tile: &Tile,
-    ) -> Turn {
-        let mut turn = Turn::Straight;
-        println!("Turn {:?}", turn);
+    fn step_strategy(&mut self, player: &Player, turns: &Vec<Turn>, _tile: &Tile) -> Option<Turn> {
+        let dir: Direction = player.direction;
+        let pos: Coord = player.position;
 
-        'selection: loop {
-            for event in self.event_pump.poll_iter() {
-                match event {
-                    Event::Quit { .. }
-                    | Event::KeyDown {
-                        keycode: Some(Keycode::Escape),
-                        ..
-                    } => panic!(),
-                    Event::KeyDown {
-                        keycode: Some(Keycode::A),
-                        ..
-                    } => {
-                        turn = match turn {
-                            Turn::Right => Turn::Straight,
-                            _ => Turn::Left
-                        };
-                        println!("Turn {:?}", turn);
-                    }
-                    Event::KeyDown {
-                        keycode: Some(Keycode::D),
-                        ..
-                    } => {
-                        turn = match turn {
-                            Turn::Left => Turn::Straight,
-                            _ => Turn::Right
-                        };
-                        println!("Turn {:?}", turn);
-                    }
-                    Event::KeyDown {
-                        keycode: Some(Keycode::SPACE),
-                        ..
-                    } => {
-                        println!("Enter pressed?");
-                        break 'selection;
-                    }
-                    _ => {}
+        println!("Turn {:?}", self.turn);
+
+        for event in self.event_pump.poll_iter() {
+            match event {
+                Event::Quit { .. }
+                | Event::KeyDown {
+                    keycode: Some(Keycode::Escape),
+                    ..
+                } => panic!(),
+                Event::KeyDown {
+                    keycode: Some(Keycode::A),
+                    ..
+                } => {
+                    self.turn = match self.turn {
+                        Turn::Right => Turn::Straight,
+                        _ => Turn::Left,
+                    };
+                    println!("Turn {:?}", self.turn);
                 }
+                Event::KeyDown {
+                    keycode: Some(Keycode::D),
+                    ..
+                } => {
+                    self.turn = match self.turn {
+                        Turn::Left => Turn::Straight,
+                        _ => Turn::Right,
+                    };
+                    println!("Turn {:?}", self.turn);
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::SPACE),
+                    ..
+                } => {
+                    println!("Enter pressed?");
+                    return Some(self.turn)
+                }
+                _ => {}
             }
-            ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
         }
-        turn
+
+        return None
     }
 }
 
-
-impl GameState {
-    pub fn new(map: HexMap) -> Self {
+impl<'a> GameState<'a> {
+    pub fn new(map: HexMap) {
         let players = map.player_builder.clone().all_players();
         let player_index = 0;
         let rolling = true;
         let blockages = vec![];
         let shortest_dist_map = BTreeMap::new();
 
-        GameState {
+        let sdl_context = sdl2::init().unwrap();
+        let video_subsystem = sdl_context.video().unwrap();
+
+        let screen_width = 1000;
+
+        let mut window = video_subsystem
+            .window("rust-sdl2 demo", screen_width, screen_width)
+            .position_centered()
+            .build()
+            .unwrap();
+        // let _ = window.set_opacity(0.1); // Transparent window
+        // window.set_bordered(false);
+
+        // window.set_position(
+        //     video::WindowPos::Positioned(0),
+        //     video::WindowPos::Positioned(0),
+        // );
+
+        let mut canvas = window.into_canvas().build().unwrap();
+        canvas.window_mut().set_position(
+            video::WindowPos::Positioned(10),
+            video::WindowPos::Positioned(10),
+        );
+
+        canvas.clear();
+
+        let scale: f64 = 42.0;
+        let start = Coord::new(360, 700);
+
+        let mut event_pump = sdl_context.event_pump().unwrap();
+
+        let mut game_state = GameState {
             map,
             players,
             player_index,
             rolling,
             blockages,
             shortest_dist_map,
-        }
+            start,
+            scale,
+            canvas: &mut canvas,
+        };
+
+        game_state.display(&mut event_pump);
     }
 
     pub fn best_fun(
@@ -382,7 +418,7 @@ impl GameState {
         }
     }
 
-    pub fn gear_up(gear: u8) -> ChangeGear {
+    pub fn gear_up(_: u8) -> ChangeGear {
         ChangeGear::Up
     }
 
@@ -403,19 +439,51 @@ impl GameState {
     }
 
     pub fn step_game(&mut self, event_pump: &mut EventPump) -> bool {
-        let p = &mut self.players[self.player_index];
-
         if self.rolling {
             // p.roll_dice(BestGearStrategy {});
-            p.roll_dice(ManualStrategy { event_pump: event_pump });
+            {
+                self.players[self.player_index].roll_dice(ManualStrategy {
+                    turn: Turn::Straight,
+                    event_pump: event_pump,
+                });
+            }
             self.rolling = false;
         } else {
             // p.step(&self.map.tiles, &self.blockages, BestStepStategy { shortest_dist_map: &self.shortest_dist_map, blockages: &self.blockages });
-            p.step(&self.map.tiles, &self.blockages, ManualStrategy { event_pump: event_pump });
 
-            if p.finished {
-                if self.map.tiles.contains_key(&p.position) && self.map.tiles[&p.position].blue {
-                    p.forced_gear_down = true;
+            if let Some(turns) = self.players[self.player_index].pre_step(&self.map.tiles, &self.blockages) {
+
+                let mut strategy = ManualStrategy {
+                    turn: Turn::Straight,
+                    event_pump: event_pump,
+                };
+
+                loop {
+                    let b = self.players[self.player_index].step(
+                        &turns,
+                        &self.map.tiles,
+                        &mut strategy,
+                    );
+                    if b {
+                        break;
+                    }
+
+                    let player_dir = self.players[self.player_index].direction;
+                    self.players[self.player_index].direction = self.players[self.player_index].direction + strategy.turn;
+
+                    self.render();
+                    self.canvas.present();
+
+                    // Reset value
+                    self.players[self.player_index].direction = player_dir;
+
+                    ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+                }
+            }
+
+            if self.players[self.player_index].finished {
+                if self.map.tiles.contains_key(&self.players[self.player_index].position) && self.map.tiles[&self.players[self.player_index].position].blue {
+                    self.players[self.player_index].forced_gear_down = true;
                 }
 
                 self.rolling = true;
@@ -429,48 +497,27 @@ impl GameState {
         return false;
     }
 
-    pub fn display(&mut self) {
-        let sdl_context = sdl2::init().unwrap();
-        let video_subsystem = sdl_context.video().unwrap();
+    pub fn render(&mut self) {
+        for p in &self.players {
+            p.draw(self.canvas, self.start, self.scale);
+        }
 
-        let screen_width = 1000;
+        self.map.draw(self.canvas, self.start, self.scale);
 
-        let mut window = video_subsystem
-            .window("rust-sdl2 demo", screen_width, screen_width)
-            .position_centered()
-            .build()
-            .unwrap();
-        // window.set_bordered(false);
+        for p in &self.players {
+            p.draw(self.canvas, self.start, self.scale);
+        }
+    }
 
-        // window.set_position(
-        //     video::WindowPos::Positioned(0),
-        //     video::WindowPos::Positioned(0),
-        // );
-
-        let mut canvas = window.into_canvas().build().unwrap();
-        canvas.window_mut().set_position(
-            video::WindowPos::Positioned(10),
-            video::WindowPos::Positioned(10),
-        );
-
-        canvas.clear();
-
-        let scale: f64 = 42.0;
-        let start = Coord::new(360, 700);
-
-        let mut event_pump = sdl_context.event_pump().unwrap();
-
+    pub fn display(&mut self, event_pump: &mut EventPump) {
         self.blockages = self.update_gameboard();
         self.shortest_dist_map = self.map.shortest_path();
 
-        self.map.draw(&mut canvas, start, scale);
-        for p in &self.players {
-            p.draw(&mut canvas, start, scale);
-        }
-        canvas.present();
+        self.render();
+        self.canvas.present();
 
         'game: loop {
-            let mut step_game = false;
+            // let mut step_game = false;
             for event in event_pump.poll_iter() {
                 match event {
                     Event::Quit { .. }
@@ -478,31 +525,23 @@ impl GameState {
                         keycode: Some(Keycode::Escape),
                         ..
                     } => break 'game,
-                    Event::KeyDown {
-                        keycode: Some(Keycode::Space),
-                        ..
-                    } => {
-                        step_game = true;
-                    }
+                    // Event::KeyDown {
+                    //     keycode: Some(Keycode::Space),
+                    //     ..
+                    // } => {
+                    //     step_game = true;
+                    // }
                     _ => {}
                 }
             }
 
-            for p in &self.players {
-                p.draw(&mut canvas, start, scale);
-            }
+            // if step_game {
+                self.step_game(event_pump);
+            // }
 
-            if step_game {
-                self.step_game(&mut event_pump);
-            }
+            self.render();
 
-            self.map.draw(&mut canvas, start, scale);
-
-            for p in &self.players {
-                p.draw(&mut canvas, start, scale);
-            }
-
-            canvas.present();
+            self.canvas.present();
             ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
         }
     }
