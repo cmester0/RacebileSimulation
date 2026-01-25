@@ -142,10 +142,29 @@ impl HexMap {
         for (c, dirs) in &self.start_line {
             let c = start + *c * (scale as i32);
             for d in dirs {
-                canvas.set_draw_color(Color::RGB(255, 0, 255));
-                for i in -1..=1 {
-                    for j in -1..=1 {
-                        let _ = draw_hexagon_side(canvas, c.x() + i, c.y() + j, scale, *d);
+                for i in -2..=2 {
+                    for j in -2..=2 {
+                        if (((c.x() + i + 2) + (c.y() + j + 2) + 3) / 4) % 2 == 0 {
+                            let _ = draw_hexagon_side_checkerboard(
+                                canvas,
+                                c.x() + i,
+                                c.y() + j,
+                                scale,
+                                *d,
+                                Color::RGB(0, 0, 0),
+                                Color::RGB(255, 255, 255),
+                            );
+                        } else {
+                            let _ = draw_hexagon_side_checkerboard(
+                                canvas,
+                                c.x() + i,
+                                c.y() + j,
+                                scale,
+                                *d,
+                                Color::RGB(255, 255, 255),
+                                Color::RGB(0, 0, 0),
+                            );
+                        }
                     }
                 }
             }
@@ -154,10 +173,30 @@ impl HexMap {
         for (c, dirs) in &self.mid_line {
             let c = start + *c * (scale as i32);
             for d in dirs {
-                canvas.set_draw_color(Color::RGB(255, 0, 255));
-                for i in -1..=1 {
-                    for j in -1..=1 {
-                        let _ = draw_hexagon_side(canvas, c.x() + i, c.y() + j, scale, *d);
+                // canvas.set_draw_color(Color::RGB(255, 0, 255));
+                for i in -2..=2 {
+                    for j in -2..=2 {
+                        if (((c.x() + i + 2) + (c.y() + j + 2) + 3) / 4) % 2 == 0 {
+                            let _ = draw_hexagon_side_checkerboard(
+                                canvas,
+                                c.x() + i,
+                                c.y() + j,
+                                scale,
+                                *d,
+                                Color::RGB(0, 0, 0),
+                                Color::RGB(255, 255, 255),
+                            );
+                        } else {
+                            let _ = draw_hexagon_side_checkerboard(
+                                canvas,
+                                c.x() + i,
+                                c.y() + j,
+                                scale,
+                                *d,
+                                Color::RGB(255, 255, 255),
+                                Color::RGB(0, 0, 0),
+                            );
+                        }
                     }
                 }
             }
@@ -436,7 +475,7 @@ impl<'a> GameState<'a> {
                     PlayerGearStrategy::Best => {
                         let strategy = BestGearStrategy {};
                         self.players[self.player_index].roll_dice(strategy);
-                    },
+                    }
                     PlayerGearStrategy::Manual => {
                         let strategy = ManualGearStrategy {
                             event_pump: event_pump,
@@ -458,8 +497,15 @@ impl<'a> GameState<'a> {
 
                 match step_strat {
                     PlayerStepStrategy::Best => {
-                        let mut strategy = BestStepStategy {blockages: &self.blockages, shortest_dist_map: &self.shortest_dist_map};
-                        self.players[self.player_index].step(&turns, &self.map.tiles, &mut strategy);
+                        let mut strategy = BestStepStategy {
+                            blockages: &self.blockages,
+                            shortest_dist_map: &self.shortest_dist_map,
+                        };
+                        self.players[self.player_index].step(
+                            &turns,
+                            &self.map.tiles,
+                            &mut strategy,
+                        );
                     }
                     PlayerStepStrategy::Manual => {
                         let mut strategy = ManualStepStrategy {
@@ -468,8 +514,11 @@ impl<'a> GameState<'a> {
                         };
 
                         loop {
-                            if self.players[self.player_index].step(&turns, &self.map.tiles, &mut strategy)
-                            {
+                            if self.players[self.player_index].step(
+                                &turns,
+                                &self.map.tiles,
+                                &mut strategy,
+                            ) {
                                 break;
                             }
 
@@ -515,15 +564,21 @@ impl<'a> GameState<'a> {
 
             // Passed midline / goal line
             if self.players[self.player_index].first_half {
-                for (c,dirs) in &self.map.mid_line {
-                    if old_pos == *c && self.players[self.player_index].position != old_pos && dirs.contains(&old_dir) {
+                for (c, dirs) in &self.map.mid_line {
+                    if old_pos == *c
+                        && self.players[self.player_index].position != old_pos
+                        && dirs.contains(&old_dir)
+                    {
                         // Cross line
                         self.players[self.player_index].first_half = false;
                     }
                 }
             } else {
-                for (c,dirs) in &self.map.start_line {
-                    if old_pos == *c && self.players[self.player_index].position != old_pos && dirs.contains(&old_dir) {
+                for (c, dirs) in &self.map.start_line {
+                    if old_pos == *c
+                        && self.players[self.player_index].position != old_pos
+                        && dirs.contains(&old_dir)
+                    {
                         // Cross line
                         self.players[self.player_index].round += 1;
                         self.players[self.player_index].first_half = true;
