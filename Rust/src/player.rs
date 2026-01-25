@@ -1,16 +1,11 @@
 use crate::canvas_draw::*;
 use crate::util::*;
 use rand::seq::IndexedRandom;
-use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::render::Canvas;
 use sdl2::video::Window;
-use sdl2::*;
-use std::cmp::{max, min};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::ops::Add;
-use std::time::Duration;
 
 pub struct GeneralError {}
 
@@ -62,6 +57,8 @@ pub struct Player {
 
     pub bonked: bool,
     pub finished: bool,
+    pub round: usize,
+    pub first_half: bool,
 }
 
 pub trait StepStrategy {
@@ -114,7 +111,7 @@ impl Player {
     pub fn step_possibilities(
         &self,
         tiles: &BTreeMap<Coord, Tile>,
-        blockages: &Vec<Coord>,
+        choice_vec: &Option<&Vec<Direction>>,
     ) -> Vec<Turn> {
         if !tiles.contains_key(&self.position) {
             return vec![Turn::Straight];
@@ -132,20 +129,29 @@ impl Player {
             // Bug??: {Coord { q: -2, r: -6 }: DL, Coord { q: -1, r: -5 }: UL} Coord { q: -2, r: -5 } Coord { q: -3, r: -4 }
 
             vec![curr_tile.forced[&self.old_position]] // Old position need not be there?
+        } else if let Some(choice_vec) = choice_vec && self.round <= choice_vec.len() {
+            println!("Choice vec: {:?}", choice_vec);
+            println!("Directions {:?} vs default {:?}: ", vec![choice_vec[self.round-1]], curr_tile.directions);
+            vec![choice_vec[self.round-1]] // Only one?
         } else {
             curr_tile.directions
         };
 
-        dir.into_iter()
+        let result = dir.into_iter()
             .filter_map(|x| self.direction.turn_to_dir(x))
             .filter(|x| !(self.roll.iter().fold(0, u8::add) > 9) || *x == Turn::Straight) // If too fast to turn
-            .collect()
+            .collect();
+
+        println!("Possible turns: {:?}", result);
+
+        result
     }
 
     pub fn pre_step(
         &mut self,
         tiles: &BTreeMap<Coord, Tile>,
         blockages: &Vec<Coord>,
+        choice_vec: &BTreeMap<Coord, Vec<Direction>>,
     ) -> Option<Vec<Turn>> {
         if self.next_falls_off {
             self.old_position = self.position;
@@ -161,7 +167,12 @@ impl Player {
             self.outside_board = false;
             self.position = self.old_position;
             self.old_position = self.position;
-            self.direction = tiles[&self.position].directions[0]; // TODO: allow stategy when re-entering the board
+
+            if let Some(choice_vec) =  choice_vec.get(&self.position) && self.round <= choice_vec.len() {
+                self.direction = choice_vec[self.round-1];
+            } else {
+                self.direction = tiles[&self.position].directions[0]; // TODO: allow stategy when re-entering the board
+            }
             return None; // Done
         } else {
             self.old_position = self.position;
@@ -183,19 +194,33 @@ impl Player {
             return None;
         }
 
-        Some(self.step_possibilities(tiles, blockages))
+        Some(self.step_possibilities(tiles, &choice_vec.get(&self.position)))
     }
 
-    pub fn step<F: StepStrategy>(
+    pub fn step(
         &mut self,
         turns: &Vec<Turn>,
         tiles: &BTreeMap<Coord, Tile>,
-        strategy: &mut F,
+        strategy: &mut impl StepStrategy,
     ) -> bool {
         let curr_tile = tiles[&self.position].clone();
-        let Some(mut turn) = strategy.step_strategy(self, &turns, &curr_tile) else {
+
+        let Some(mut turn) = (if self.roll.iter().fold(0, u8::add) > 9 {
+            Some(Turn::Straight)
+        } else {
+            strategy.step_strategy(self, &turns, &curr_tile)
+        }) else {
             return false;
         };
+
+        println!("Possible turns: {:?} chose {:?}", turns, turn);
+        println!("Choice? {:?}", curr_tile.choice);
+
+        // Must use valid turns (e.g. forced) when going over choice
+        if curr_tile.choice && !turns.contains(&turn) {
+            println!("Wrong direction, fell off track!");
+            self.next_falls_off = true;
+        }
 
         if (!curr_tile.forced.is_empty() || self.roll.iter().fold(0, u8::add) > 9)
             && !turns.contains(&turn)
@@ -219,7 +244,7 @@ impl Player {
         return true;
     }
 
-    pub fn roll_dice<F: GearStrategy>(&mut self, mut strategy: F) {
+    pub fn roll_dice(&mut self, mut strategy: impl GearStrategy) {
         self.finished = false;
 
         if self.stalled {

@@ -5,10 +5,10 @@ use rand::seq::IndexedRandom;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
+use sdl2::render::Canvas;
+use sdl2::video::Window;
 use sdl2::*;
-use std::cmp::{max, min};
 use std::collections::{BTreeMap, BTreeSet};
-use std::ops::Add;
 use std::time::Duration;
 
 #[derive(Clone)]
@@ -56,6 +56,8 @@ impl PlayerBuilder {
             finished: false,
             forced_gear_down: false,
             next_falls_off: false,
+            round: 1,
+            first_half: true,
         }
     }
 
@@ -73,10 +75,6 @@ pub struct HexMap {
     pub mid_line: Vec<(Coord, Vec<Direction>)>,
     pub player_builder: PlayerBuilder,
 }
-
-use sdl2::rect::Point;
-use sdl2::render::Canvas;
-use sdl2::video::Window;
 
 impl HexMap {
     pub fn shortest_path(&mut self) -> BTreeMap<Coord, Vec<Direction>> {
@@ -167,9 +165,23 @@ impl HexMap {
     }
 }
 
+#[derive(Clone, Copy)]
+pub enum PlayerStepStrategy {
+    Best,
+    Manual,
+}
+
+#[derive(Clone, Copy)]
+pub enum PlayerGearStrategy {
+    Best,
+    Manual,
+}
+
 pub struct GameState<'a> {
     pub map: HexMap,
     pub players: Vec<Player>,
+    pub player_strategies: Vec<(PlayerGearStrategy, PlayerStepStrategy)>,
+
     pub player_index: usize,
     pub rolling: bool,
     pub blockages: Vec<Coord>,
@@ -178,6 +190,8 @@ pub struct GameState<'a> {
     pub start: Coord,
     pub scale: f64,
     pub canvas: &'a mut Canvas<Window>,
+
+    pub choice_tile_selections: BTreeMap<Coord, Vec<Direction>>,
 }
 
 pub struct BestStepStategy<'a> {
@@ -186,7 +200,7 @@ pub struct BestStepStategy<'a> {
 }
 
 impl<'a> StepStrategy for BestStepStategy<'a> {
-    fn step_strategy(&mut self, player: &Player, turns: &Vec<Turn>, _tile: &Tile) -> Option<Turn> {
+    fn step_strategy(&mut self, player: &Player, turns: &Vec<Turn>, tile: &Tile) -> Option<Turn> {
         let dir: Direction = player.direction;
         let pos: Coord = player.position;
 
@@ -206,13 +220,17 @@ impl<'a> StepStrategy for BestStepStategy<'a> {
                         continue;
                     }
 
-                    return Some(*t)
+                    return Some(*t);
                 }
 
                 turns[0]
             }
         } else {
-            best_dirs[0]
+            if tile.choice {
+                *turns.choose(&mut rand::rng()).unwrap()
+            } else {
+                best_dirs[0]
+            }
         })
     }
 }
@@ -225,12 +243,11 @@ impl GearStrategy for BestGearStrategy {
     }
 }
 
-pub struct ManualStrategy<'a> {
-    turn: Turn,
+pub struct ManualGearStrategy<'a> {
     event_pump: &'a mut EventPump,
 }
 
-impl<'a> GearStrategy for ManualStrategy<'a> {
+impl<'a> GearStrategy for ManualGearStrategy<'a> {
     fn gear_strategy(&mut self, player: &Player) -> ChangeGear {
         let gear = player.gear;
         let mut gear_change = ChangeGear::Up;
@@ -281,12 +298,19 @@ impl<'a> GearStrategy for ManualStrategy<'a> {
     }
 }
 
-impl<'a> StepStrategy for ManualStrategy<'a> {
-    fn step_strategy(&mut self, player: &Player, turns: &Vec<Turn>, _tile: &Tile) -> Option<Turn> {
-        let dir: Direction = player.direction;
-        let pos: Coord = player.position;
+pub struct ManualStepStrategy<'a> {
+    turn: Turn,
+    event_pump: &'a mut EventPump,
+}
 
-        println!("Turn {:?}", self.turn);
+impl<'a> StepStrategy for ManualStepStrategy<'a> {
+    fn step_strategy(
+        &mut self,
+        _player: &Player,
+        _turns: &Vec<Turn>,
+        _tile: &Tile,
+    ) -> Option<Turn> {
+        // println!("Turn {:?}", self.turn);
 
         for event in self.event_pump.poll_iter() {
             match event {
@@ -303,7 +327,7 @@ impl<'a> StepStrategy for ManualStrategy<'a> {
                         Turn::Right => Turn::Straight,
                         _ => Turn::Left,
                     };
-                    println!("Turn {:?}", self.turn);
+                    // println!("Turn {:?}", self.turn);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::D),
@@ -313,25 +337,25 @@ impl<'a> StepStrategy for ManualStrategy<'a> {
                         Turn::Left => Turn::Straight,
                         _ => Turn::Right,
                     };
-                    println!("Turn {:?}", self.turn);
+                    // println!("Turn {:?}", self.turn);
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::SPACE),
                     ..
                 } => {
-                    println!("Enter pressed?");
-                    return Some(self.turn)
+                    // println!("Enter pressed?");
+                    return Some(self.turn);
                 }
                 _ => {}
             }
         }
 
-        return None
+        return None;
     }
 }
 
 impl<'a> GameState<'a> {
-    pub fn new(map: HexMap) {
+    pub fn new(map: HexMap, player_strategies: Vec<(PlayerGearStrategy, PlayerStepStrategy)>) {
         let players = map.player_builder.clone().all_players();
         let player_index = 0;
         let rolling = true;
@@ -343,7 +367,7 @@ impl<'a> GameState<'a> {
 
         let screen_width = 1000;
 
-        let mut window = video_subsystem
+        let window = video_subsystem
             .window("rust-sdl2 demo", screen_width, screen_width)
             .position_centered()
             .build()
@@ -379,47 +403,11 @@ impl<'a> GameState<'a> {
             start,
             scale,
             canvas: &mut canvas,
+            choice_tile_selections: BTreeMap::new(),
+            player_strategies,
         };
 
         game_state.display(&mut event_pump);
-    }
-
-    pub fn best_fun(
-        shortest_dist_map: &BTreeMap<Coord, Vec<Direction>>,
-        blockages: &Vec<Coord>,
-        turns: &Vec<Turn>,
-        dir: Direction,
-        pos: Coord,
-        _tile: &Tile,
-    ) -> Turn {
-        let best_dirs: Vec<Turn> = shortest_dist_map[&pos]
-            .clone()
-            .into_iter()
-            .filter_map(|d| dir.turn_to_dir(d))
-            .collect();
-        println!("best dirs {:?}", best_dirs);
-        if best_dirs.is_empty() {
-            if turns.is_empty() {
-                Turn::Straight
-            } else {
-                for t in turns {
-                    let next_pos = pos + (dir + *t).to_coord();
-                    if blockages.contains(&next_pos) {
-                        continue;
-                    }
-
-                    return *t;
-                }
-
-                turns[0]
-            }
-        } else {
-            best_dirs[0]
-        }
-    }
-
-    pub fn gear_up(_: u8) -> ChangeGear {
-        ChangeGear::Up
     }
 
     pub fn update_gameboard(&mut self) -> Vec<Coord> {
@@ -442,53 +430,123 @@ impl<'a> GameState<'a> {
         if self.rolling {
             // p.roll_dice(BestGearStrategy {});
             {
-                self.players[self.player_index].roll_dice(ManualStrategy {
-                    turn: Turn::Straight,
-                    event_pump: event_pump,
-                });
+                let (gear_strat, _) = self.player_strategies[self.player_index].clone();
+
+                match gear_strat {
+                    PlayerGearStrategy::Best => {
+                        let strategy = BestGearStrategy {};
+                        self.players[self.player_index].roll_dice(strategy);
+                    },
+                    PlayerGearStrategy::Manual => {
+                        let strategy = ManualGearStrategy {
+                            event_pump: event_pump,
+                        };
+                        self.players[self.player_index].roll_dice(strategy);
+                    }
+                };
             }
             self.rolling = false;
         } else {
-            // p.step(&self.map.tiles, &self.blockages, BestStepStategy { shortest_dist_map: &self.shortest_dist_map, blockages: &self.blockages });
+            let old_dir = self.players[self.player_index].direction;
 
-            if let Some(turns) = self.players[self.player_index].pre_step(&self.map.tiles, &self.blockages) {
+            if let Some(turns) = self.players[self.player_index].pre_step(
+                &self.map.tiles,
+                &self.blockages,
+                &self.choice_tile_selections,
+            ) {
+                let (_, step_strat) = self.player_strategies[self.player_index].clone();
 
-                let mut strategy = ManualStrategy {
-                    turn: Turn::Straight,
-                    event_pump: event_pump,
-                };
-
-                loop {
-                    let b = self.players[self.player_index].step(
-                        &turns,
-                        &self.map.tiles,
-                        &mut strategy,
-                    );
-                    if b {
-                        break;
+                match step_strat {
+                    PlayerStepStrategy::Best => {
+                        let mut strategy = BestStepStategy {blockages: &self.blockages, shortest_dist_map: &self.shortest_dist_map};
+                        self.players[self.player_index].step(&turns, &self.map.tiles, &mut strategy);
                     }
+                    PlayerStepStrategy::Manual => {
+                        let mut strategy = ManualStepStrategy {
+                            turn: Turn::Straight,
+                            event_pump: event_pump,
+                        };
 
-                    let player_dir = self.players[self.player_index].direction;
-                    self.players[self.player_index].direction = self.players[self.player_index].direction + strategy.turn;
+                        loop {
+                            if self.players[self.player_index].step(&turns, &self.map.tiles, &mut strategy)
+                            {
+                                break;
+                            }
 
-                    self.render();
-                    self.canvas.present();
+                            // Render only needed for manual strategy
+                            let player_dir = self.players[self.player_index].direction;
+                            self.players[self.player_index].direction =
+                                self.players[self.player_index].direction + strategy.turn;
 
-                    // Reset value
-                    self.players[self.player_index].direction = player_dir;
+                            self.render();
+                            self.canvas.present();
 
-                    ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+                            // Reset value
+                            self.players[self.player_index].direction = player_dir;
+
+                            ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+                        }
+                    }
                 }
             }
 
+            // Check if old tile is choice tile, and set direction
+            let old_pos = self.players[self.player_index].old_position;
+            if self.map.tiles.contains_key(&old_pos) && self.map.tiles[&old_pos].choice {
+                if !self.choice_tile_selections.contains_key(&old_pos) {
+                    self.choice_tile_selections.insert(old_pos, vec![]);
+                }
+
+                if self.choice_tile_selections[&old_pos].len()
+                    < self.players[self.player_index].round
+                {
+                    let step_direction = old_dir;
+                    if self.map.tiles[&old_pos]
+                        .directions
+                        .contains(&step_direction)
+                    {
+                        self.choice_tile_selections
+                            .get_mut(&old_pos)
+                            .unwrap()
+                            .push(step_direction);
+                    }
+                }
+            }
+
+            // Passed midline / goal line
+            if self.players[self.player_index].first_half {
+                for (c,dirs) in &self.map.mid_line {
+                    if old_pos == *c && self.players[self.player_index].position != old_pos && dirs.contains(&old_dir) {
+                        // Cross line
+                        self.players[self.player_index].first_half = false;
+                    }
+                }
+            } else {
+                for (c,dirs) in &self.map.start_line {
+                    if old_pos == *c && self.players[self.player_index].position != old_pos && dirs.contains(&old_dir) {
+                        // Cross line
+                        self.players[self.player_index].round += 1;
+                        self.players[self.player_index].first_half = true;
+                    }
+                }
+            }
+
+            // Go to next player
             if self.players[self.player_index].finished {
-                if self.map.tiles.contains_key(&self.players[self.player_index].position) && self.map.tiles[&self.players[self.player_index].position].blue {
+                if self
+                    .map
+                    .tiles
+                    .contains_key(&self.players[self.player_index].position)
+                    && self.map.tiles[&self.players[self.player_index].position].blue
+                {
                     self.players[self.player_index].forced_gear_down = true;
                 }
 
                 self.rolling = true;
                 self.player_index = (self.player_index + 1) % self.players.len();
                 self.blockages = self.update_gameboard();
+
+                println!("\nPlayer {}'s turn", self.player_index);
 
                 return true;
             }
@@ -536,7 +594,8 @@ impl<'a> GameState<'a> {
             }
 
             // if step_game {
-                self.step_game(event_pump);
+            self.step_game(event_pump);
+            println!("====");
             // }
 
             self.render();

@@ -36,7 +36,7 @@ fn main() {
             // Right
             (Coord::tri(5, -2, -4), Tile::new(vec![U])),
             (Coord::tri(5, -3, -4), Tile::new(vec![UL])),
-            (Coord::tri(4, -3, -4), Tile::new(vec![U]).chikane()),
+            (Coord::tri(4, -3, -4), Tile::new(vec![U]).chikane().forced(BTreeMap::from([(Coord::tri(5,-3,-4), U), (Coord::tri(4,-3,-3), U)]))),
             (Coord::tri(4, -4, -4), Tile::new(vec![U])),
             (Coord::tri(4, -5, -4), Tile::new(vec![U])),
             (Coord::tri(4, -6, -4), Tile::new(vec![UL])),
@@ -63,7 +63,7 @@ fn main() {
                     (Coord::tri(-2, -6, 0), DL),
                 ])),
             ),
-            (Coord::tri(-2, -6, 1), Tile::new(vec![UL]).chikane()),
+            (Coord::tri(-2, -6, 1), Tile::new(vec![UL]).chikane().forced(BTreeMap::from([(Coord::tri(-1,-6,1), UL)]))),
             (Coord::tri(-3, -6, 1), Tile::new(vec![U])),
             (Coord::tri(-3, -7, 1), Tile::new(vec![UR]).blue()),
             (Coord::tri(-3, -7, 0), Tile::new(vec![DR]).blue()),
@@ -72,7 +72,7 @@ fn main() {
                 Coord::tri(-2, -6, 0),
                 Tile::new(vec![D]).forced(BTreeMap::from([(Coord::tri(-2, -7, 0), D)])),
             ),
-            (Coord::tri(-2, -5, 1), Tile::new(vec![D]).chikane()),
+            (Coord::tri(-2, -5, 1), Tile::new(vec![D]).chikane().forced(BTreeMap::from([(Coord::tri(-1,-6,1), D)]))),
             (Coord::tri(-2, -4, 1), Tile::new(vec![DL])),
             (Coord::tri(-2, -4, 2), Tile::new(vec![D])),
             (Coord::tri(-2, -3, 2), Tile::new(vec![D, DL])),
@@ -117,5 +117,18 @@ fn main() {
         ),
     };
 
-    GameState::new(rtfm); // .display();
+    use crate::map::{PlayerGearStrategy as PGS};
+    use crate::map::{PlayerStepStrategy as PSS};
+
+    GameState::new(rtfm, vec![
+        (PGS::Manual, PSS::Manual),
+        (PGS::Best, PSS::Best),
+        (PGS::Best, PSS::Best),
+        (PGS::Best, PSS::Best),
+        (PGS::Best, PSS::Best),
+        (PGS::Best, PSS::Best),
+        (PGS::Best, PSS::Best),
+        (PGS::Best, PSS::Best),
+        (PGS::Best, PSS::Best),
+    ]); // .display();
 }

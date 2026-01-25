@@ -1,14 +1,10 @@
 use crate::canvas_draw::*;
-use rand::seq::IndexedRandom;
-use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::render::Canvas;
 use sdl2::video::Window;
-use sdl2::*;
 use std::cmp::{max, min};
-use std::collections::{BTreeMap, BTreeSet};
-use std::time::Duration;
+use std::collections::BTreeMap;
+use std::ops::{Add, Mul, Sub};
 
 #[derive(Copy, Clone, PartialOrd, Ord, Eq, PartialEq, Debug)]
 pub enum Direction {
@@ -64,6 +60,18 @@ impl Direction {
             Direction::DL => Coord::tri(0, 0, 1),
             Direction::D => Coord::tri(0, 1, 0),
             Direction::DR => Coord::tri(1, 0, 0),
+        }
+    }
+
+    pub fn from_coord(c: Coord) -> Self {
+        match c {
+            _ if c == Coord::tri(0, 0, -1) => Direction::UR,
+            _ if c == Coord::tri(0, -1, 0) => Direction::U,
+            _ if c == Coord::tri(-1, 0, 0) => Direction::UL,
+            _ if c == Coord::tri(0, 0, 1) => Direction::DL,
+            _ if c == Coord::tri(0, 1, 0) => Direction::D,
+            _ if c == Coord::tri(1, 0, 0) => Direction::DR,
+            _ => unimplemented!("{:?}", c) // TODO: general direction? Or reject?
         }
     }
 
@@ -217,10 +225,10 @@ impl Tile {
 
         canvas.set_draw_color(Color::RGB(255, 255, 255));
         for i in -1..=1 {
-            draw_hexagon(canvas, c.x()+i, c.y(), scale);
+            draw_hexagon(canvas, c.x() + i, c.y(), scale);
         }
         for i in -1..=1 {
-            draw_hexagon(canvas, c.x(), c.y()+i, scale);
+            draw_hexagon(canvas, c.x(), c.y() + i, scale);
         }
     }
 }
@@ -234,8 +242,6 @@ pub struct Coord {
     pub r: i32,
 }
 
-use std::ops::Add;
-
 impl Add for Coord {
     type Output = Self;
     fn add(self, other: Self) -> Self {
@@ -246,8 +252,6 @@ impl Add for Coord {
     }
 }
 
-use std::ops::Sub;
-
 impl Sub for Coord {
     type Output = Self;
     fn sub(self, other: Self) -> Self {
@@ -257,8 +261,6 @@ impl Sub for Coord {
         }
     }
 }
-
-use std::ops::Mul;
 
 impl Mul<i32> for Coord {
     type Output = Self;
