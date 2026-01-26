@@ -234,6 +234,10 @@ impl Player {
             }
         };
 
+        if curr_tile.blockage.contains(&(self.direction + turn)) {
+            self.next_falls_off = true;
+        }
+
         self.direction = self.direction + turn;
         self.steps += 1;
         // TODO: Allow player to call finished steps themselves

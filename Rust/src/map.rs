@@ -93,6 +93,8 @@ impl HexMap {
             }
         }
 
+        let mut visit_order = vec![];
+
         let mut visited: BTreeSet<(Coord, Direction)> = BTreeSet::new();
         let mut index = 0;
         while index < stk.len() {
@@ -103,6 +105,7 @@ impl HexMap {
                 continue;
             }
             visited.insert((c, d));
+            visit_order.push((c, d));
 
             // Fell outside map (TODO: Allow this to reset direction!)
             if !self.tiles.contains_key(&c) {
@@ -112,13 +115,42 @@ impl HexMap {
             for t in [Turn::Straight, Turn::Left, Turn::Right] {
                 let new_d = d + t;
                 let new_c = c - new_d.to_coord();
+
+                // Backwards?
+
+                if self.tiles.contains_key(&new_c) && self.tiles[&new_c].blockage.contains(&new_d) {
+                    continue;
+                }
+
+                if self.tiles.contains_key(&new_c) && self.tiles[&new_c].choice && !self.tiles[&new_c].directions.contains(&new_d) {
+                    continue;
+                }
+
+                if self.tiles.contains_key(&new_c) && self.tiles[&new_c].oneway {
+                    continue;
+                }
+
+                // if self.tiles.contains_key(&new_c) && self.tiles[&new_c].forced.contains_key(&c) && !self.tiles[&c].forced.contains_key(&new_c) {
+                //     continue;
+                // }
+
+                // TODO: handle forced
+                // if self.tiles[&c].forced && !self.tiles[&c].directions.contains(&new_d) {
+                //     continue;
+                // }
+
                 stk.push(((new_c, new_d), (c, d), index - 1));
             }
         }
 
+        // for (sc, sd) in &visit_order {
+        //    println!("COORD ({:?},{:?})", sc.x(), sc.y());
+        // }
+        // panic!();
+
         for (c, _t) in &self.tiles {
             let mut dirs = vec![];
-            for ((sc, sd), _, _) in &stk {
+            for (sc, sd) in &visit_order {
                 if *c == *sc {
                     dirs.push(*sd);
                 }
@@ -132,7 +164,6 @@ impl HexMap {
     pub fn draw(&self, canvas: &mut Canvas<Window>, start: Coord, scale: f64) {
         // Draw
         canvas.set_draw_color(Color::RGB(0, 0, 0));
-        canvas.clear();
 
         for (c, t) in &self.tiles {
             let c = start + *c * (scale as i32);
@@ -231,6 +262,7 @@ pub struct GameState<'a> {
     pub canvas: &'a mut Canvas<Window>,
 
     pub choice_tile_selections: BTreeMap<Coord, Vec<Direction>>,
+    pub simulate: Option<u64>,
 }
 
 pub struct BestStepStategy<'a> {
@@ -394,7 +426,7 @@ impl<'a> StepStrategy for ManualStepStrategy<'a> {
 }
 
 impl<'a> GameState<'a> {
-    pub fn new(map: HexMap, player_strategies: Vec<(PlayerGearStrategy, PlayerStepStrategy)>) {
+    pub fn new(map: HexMap, player_strategies: Vec<(PlayerGearStrategy, PlayerStepStrategy)>, scale: f64, start: Coord) {
         let players = map.player_builder.clone().all_players();
         let player_index = 0;
         let rolling = true;
@@ -427,9 +459,6 @@ impl<'a> GameState<'a> {
 
         canvas.clear();
 
-        let scale: f64 = 42.0;
-        let start = Coord::new(360, 700);
-
         let mut event_pump = sdl_context.event_pump().unwrap();
 
         let mut game_state = GameState {
@@ -444,6 +473,7 @@ impl<'a> GameState<'a> {
             canvas: &mut canvas,
             choice_tile_selections: BTreeMap::new(),
             player_strategies,
+            simulate: None, // Some(2000),
         };
 
         game_state.display(&mut event_pump);
@@ -611,11 +641,9 @@ impl<'a> GameState<'a> {
     }
 
     pub fn render(&mut self) {
-        for p in &self.players {
-            p.draw(self.canvas, self.start, self.scale);
+        if self.simulate.is_none() {
+            self.map.draw(self.canvas, self.start, self.scale);
         }
-
-        self.map.draw(self.canvas, self.start, self.scale);
 
         for p in &self.players {
             p.draw(self.canvas, self.start, self.scale);
@@ -627,7 +655,12 @@ impl<'a> GameState<'a> {
         self.shortest_dist_map = self.map.shortest_path();
 
         self.render();
+        if self.simulate.is_some() {
+            self.map.draw(self.canvas, self.start, self.scale);
+        }
         self.canvas.present();
+
+        let mut iters = self.simulate.unwrap_or_default();
 
         'game: loop {
             // let mut step_game = false;
@@ -648,6 +681,16 @@ impl<'a> GameState<'a> {
                 }
             }
 
+            if let Some(bound) = self.simulate {
+                if iters >= bound {
+                    self.canvas.set_draw_color(Color::RGB(0, 0, 0));
+                    self.canvas.clear();
+                    self.map.draw(self.canvas, self.start, self.scale);
+                    iters = 0;
+                }
+                iters += 1;
+            }
+
             // if step_game {
             self.step_game(event_pump);
             println!("====");
@@ -655,8 +698,10 @@ impl<'a> GameState<'a> {
 
             self.render();
 
-            self.canvas.present();
-            ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+            if self.simulate.is_none() || iters + 2 >= self.simulate.unwrap() {
+                self.canvas.present();
+                ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+            }
         }
     }
 }
