@@ -622,9 +622,16 @@ impl<'a> GameState<'a> {
                     .map
                     .tiles
                     .contains_key(&self.players[self.player_index].position)
-                    && self.map.tiles[&self.players[self.player_index].position].blue
                 {
-                    self.players[self.player_index].forced_gear_down = true;
+                    if self.map.tiles[&self.players[self.player_index].position].blue
+                    {
+                        self.players[self.player_index].forced_gear_down = true;
+                    }
+
+                    if self.map.tiles[&self.players[self.player_index].position].rotate
+                    {
+                        self.players[self.player_index].direction = *vec![Direction::U,Direction::UR,Direction::DR,Direction::UL,Direction::DL,Direction::D].choose(&mut rand::rng()).unwrap();
+                    }
                 }
 
                 self.rolling = true;
@@ -681,14 +688,16 @@ impl<'a> GameState<'a> {
                 }
             }
 
+            self.canvas.set_draw_color(Color::RGB(0, 0, 0));
             if let Some(bound) = self.simulate {
                 if iters >= bound {
-                    self.canvas.set_draw_color(Color::RGB(0, 0, 0));
                     self.canvas.clear();
                     self.map.draw(self.canvas, self.start, self.scale);
                     iters = 0;
                 }
                 iters += 1;
+            } else {
+                self.canvas.clear();
             }
 
             // if step_game {

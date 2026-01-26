@@ -118,16 +118,7 @@ impl Player {
         }
 
         let curr_tile = tiles[&self.position].clone();
-        let dir = if !curr_tile.forced.is_empty() {
-            println!(
-                "Bug??: {:?} {:?} {:?}",
-                curr_tile.forced, self.position, self.old_position
-            );
-
-            // best dirs [Right, Straight, Straight, Right]
-            // ITER
-            // Bug??: {Coord { q: -2, r: -6 }: DL, Coord { q: -1, r: -5 }: UL} Coord { q: -2, r: -5 } Coord { q: -3, r: -4 }
-
+        let dir = if !curr_tile.forced.is_empty() && curr_tile.forced.contains_key(&self.old_position) {
             vec![curr_tile.forced[&self.old_position]] // Old position need not be there?
         } else if let Some(choice_vec) = choice_vec && self.round <= choice_vec.len() {
             println!("Choice vec: {:?}", choice_vec);

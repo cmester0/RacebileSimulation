@@ -22,7 +22,8 @@ fn main() {
     use crate::map::{PlayerStepStrategy as PSS};
 
     GameState::new(board, vec![
-        (PGS::Best, PSS::Best), // (PGS::Manual, PSS::Manual),
+        // (PGS::Best, PSS::Best),
+        (PGS::Manual, PSS::Manual),
         (PGS::Best, PSS::Best),
         (PGS::Best, PSS::Best),
         (PGS::Best, PSS::Best),

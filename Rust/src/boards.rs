@@ -113,6 +113,7 @@ pub fn rtfm() -> HexMap {
     }
 }
 
+// TODO: Choice fields are no longer guaranteed to have a previous round, as players can skip the choice in an earlier round! (Choice should be a map from round?)
 pub fn random_direction() -> HexMap {
     HexMap {
         tiles: BTreeMap::from([
