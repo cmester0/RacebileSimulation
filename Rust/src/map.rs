@@ -58,6 +58,7 @@ impl PlayerBuilder {
             next_falls_off: false,
             round: 1,
             first_half: true,
+            turned_over: false,
         }
     }
 
@@ -485,7 +486,7 @@ impl<'a> GameState<'a> {
         let mut blockages = vec![];
         for p in &self.players {
             if player_positions.contains(&p.position)
-                || self.map.tiles.contains_key(&p.position) && self.map.tiles[&p.position].chikane
+                || self.map.tiles.contains_key(&p.position) && self.map.tiles[&p.position].chikane && p.turned_over
             {
                 blockages.push(p.position);
             }
@@ -623,14 +624,37 @@ impl<'a> GameState<'a> {
                     .tiles
                     .contains_key(&self.players[self.player_index].position)
                 {
-                    if self.map.tiles[&self.players[self.player_index].position].blue
+                    let player_pos = self.players[self.player_index].position;
+
+                    if self.map.tiles[&player_pos].blue
                     {
                         self.players[self.player_index].forced_gear_down = true;
                     }
 
-                    if self.map.tiles[&self.players[self.player_index].position].rotate
+                    if self.map.tiles[&player_pos].rotate
                     {
                         self.players[self.player_index].direction = *vec![Direction::U,Direction::UR,Direction::DR,Direction::UL,Direction::DL,Direction::D].choose(&mut rand::rng()).unwrap();
+                    }
+
+                    if self.map.tiles[&player_pos].chikane
+                    {
+                        println!("Number of players at {:?} is {:?}", player_pos, self.players.iter().filter(|x| x.position == player_pos).count());
+                        if self.players.iter().filter(|x| x.position == player_pos).count() == 1 {
+                            self.players[self.player_index].turned_over = true;
+                        }
+                    }
+
+                    let player_dir = self.players[self.player_index].direction;
+                    let bonked_pos = player_pos + player_dir.to_coord();
+
+                    if self.players[self.player_index].bonked &&
+                        self.map.tiles.contains_key(&bonked_pos) &&
+                        self.map.tiles[&bonked_pos].chikane
+                    {
+                        // Flip player over after bonking
+                        for p in self.players.iter_mut().filter(|x| x.position == bonked_pos) { // TODO: Should be able to use `.find().unwrap()` instead
+                            p.turned_over = false;
+                        }
                     }
                 }
 

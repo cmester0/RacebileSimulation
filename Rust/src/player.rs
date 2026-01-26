@@ -6,36 +6,46 @@ use sdl2::render::Canvas;
 use sdl2::video::Window;
 use std::collections::BTreeMap;
 use std::ops::Add;
+use std::cmp::max;
 
-pub struct GeneralError {}
+pub struct GeneralError {
+    pub gear_change: bool, // Forgot to anounce gear change
+    pub gear_down: bool, // Gearing down
+    pub whines: u8, // Un-announced whines
+}
 
 pub struct TechnicalError {
     // Move bottle cap on the side (two wheels required)
+    pub ones: u8, // Ones
+    pub destroyed_gear_box: bool, // gear_box - 3 ones
+    pub high_dice: u8, // Hån - ridicule
+    pub whines: u8, // driving 7+ speed in turns
+    pub offmap: bool, // half a beer now, half before next turn later
 }
 
 pub struct Sips {
     pub start_last: bool,
     pub end_first: bool,
-    pub whines: u8,
+    
     pub remaining_steps: u8,
     pub fell_out: bool,
     pub back_on: bool,
-    pub ones: u8, // Hån - ridicule
+    pub ones: u8,
 }
 
-impl Default for Sips {
-    fn default() -> Sips {
-        Sips {
-            start_last: false,
-            end_first: false,
-            whines: 0,
-            remaining_steps: 0,
-            fell_out: false,
-            back_on: false,
-            ones: 0,
-        }
-    }
-}
+// impl Default for Sips {
+//     fn default() -> Sips {
+//         Sips {
+//             start_last: false,
+//             end_first: false,
+//             whines: 0,
+//             remaining_steps: 0,
+//             fell_out: false,
+//             back_on: false,
+//             ones: 0,
+//         }
+//     }
+// }
 
 #[derive(Clone)]
 pub struct Player {
@@ -59,6 +69,8 @@ pub struct Player {
     pub finished: bool,
     pub round: usize,
     pub first_half: bool,
+
+    pub turned_over: bool,
 }
 
 pub trait StepStrategy {
@@ -83,7 +95,12 @@ impl Player {
 
     pub fn draw(&self, canvas: &mut Canvas<Window>, start: Coord, scale: f64) {
         let c = start + self.position * (scale as i32);
-        canvas.set_draw_color(self.color);
+
+        if self.turned_over {
+            canvas.set_draw_color(Color::RGB(max(self.color.r,50) - 50, max(self.color.g,50) - 50, max(self.color.b,50) - 50));
+        } else {
+            canvas.set_draw_color(self.color);
+        }
 
         for i in -1..=1 {
             for j in -1..=1 {
@@ -241,6 +258,8 @@ impl Player {
 
     pub fn roll_dice(&mut self, mut strategy: impl GearStrategy) {
         self.finished = false;
+
+        self.turned_over = false;
 
         if self.stalled {
             self.gear = 1;

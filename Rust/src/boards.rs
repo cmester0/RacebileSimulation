@@ -510,7 +510,7 @@ pub fn hyper_chikane() -> HexMap {
             (Coord::tri(-3,8,2), Tile::new(vec![UR]).forced(BTreeMap::from([
                 (Coord::tri(-3,8,3), UR),
             ]))),
-            (Coord::tri(-3,8,1), Tile::new(vec![UR,UL]).forced(BTreeMap::from([
+            (Coord::tri(-3,8,1), Tile::new(vec![UR,UL]).chikane().forced(BTreeMap::from([
                 (Coord::tri(-3,8,2), UR),
                 (Coord::tri(-4,10,-1), UL),
             ]))),
