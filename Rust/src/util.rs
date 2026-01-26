@@ -435,23 +435,29 @@ impl Tile {
             }
         }
 
-        canvas.set_draw_color(if !self.forced.is_empty() {
-            Color::RGB(70, 70, 70)
-        } else if self.choice {
-            Color::RGB(170, 170, 170)
-        } else {
-            Color::RGB(255, 255, 255)
-        });
         for d in &self.directions {
-            let angle = d.angle();
-            let cx = c.x() + (scale / 2_f64.sqrt() * angle.cos()) as i32;
-            let cy = c.y() + (scale / 2_f64.sqrt() * angle.sin()) as i32;
+            let mut draw_arrows = false;
+            canvas.set_draw_color(if !self.forced.is_empty() && self.forced.iter().any(|x| x.1 == d) {
+                draw_arrows = true;
+                Color::RGB(70, 70, 70)
+            } else if self.choice {
+                draw_arrows = true;
+                Color::RGB(170, 170, 170)
+            } else {
+                Color::RGB(255, 255, 255)
+            });
 
-            for i in -1..=1 {
-                let _ = canvas.draw_line((c.x() + i, c.y()), (cx + i, cy));
-            }
-            for i in -1..=1 {
-                let _ = canvas.draw_line((c.x(), c.y() + i), (cx, cy + i));
+            if draw_arrows {
+                let angle = d.angle();
+                let cx = c.x() + (scale / 2_f64.sqrt() * angle.cos()) as i32;
+                let cy = c.y() + (scale / 2_f64.sqrt() * angle.sin()) as i32;
+
+                for i in -1..=1 {
+                    let _ = canvas.draw_line((c.x() + i, c.y()), (cx + i, cy));
+                }
+                for i in -1..=1 {
+                    let _ = canvas.draw_line((c.x(), c.y() + i), (cx, cy + i));
+                }
             }
         }
 

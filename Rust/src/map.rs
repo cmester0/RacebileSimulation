@@ -2,6 +2,7 @@ use crate::canvas_draw::*;
 use crate::player::*;
 use crate::util::*;
 use rand::seq::IndexedRandom;
+use rand::seq::SliceRandom;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
@@ -78,35 +79,39 @@ pub struct HexMap {
 }
 
 impl HexMap {
-    pub fn shortest_path(&mut self) -> BTreeMap<Coord, Vec<Direction>> {
+    pub fn shortest_path(
+        &mut self,
+        line: &Vec<(Coord, Vec<Direction>)>,
+    ) -> BTreeMap<Coord, Vec<Direction>> {
         let mut shortest_dist_map: BTreeMap<Coord, Vec<Direction>> = BTreeMap::new();
+
+        let mut visit_order = vec![];
 
         let mut stk = vec![];
         {
-            for (c, dirs) in &self.start_line {
+            for (c, dirs) in line {
                 for d in dirs {
-                    for t in [Turn::Straight, Turn::Left, Turn::Right] {
-                        let new_d = *d + t;
-                        let new_c = *c - new_d.to_coord();
-                        stk.push(((new_c, new_d), (*c, *d), 0));
+                    for new_d in &self.tiles[&(*c + d.to_coord())].directions {
+                        // Take a step
+                        stk.push(((*c + d.to_coord(), *new_d),-1));
                     }
                 }
             }
         }
 
-        let mut visit_order = vec![];
-
         let mut visited: BTreeSet<(Coord, Direction)> = BTreeSet::new();
         let mut index = 0;
         while index < stk.len() {
-            let ((c, d), (nc, _), _) = stk[index];
+            let ((c, d), bredth) = stk[index];
             index += 1;
 
             if visited.contains(&(c, d)) {
                 continue;
             }
-            visited.insert((c, d));
-            visit_order.push((c, d));
+            if bredth != -1 {
+                visited.insert((c, d));
+            }
+            visit_order.push(((c, d), bredth));
 
             // Fell outside map (TODO: Allow this to reset direction!)
             if !self.tiles.contains_key(&c) {
@@ -118,45 +123,49 @@ impl HexMap {
                 let new_c = c - new_d.to_coord();
 
                 // Backwards?
-
                 if self.tiles.contains_key(&new_c) && self.tiles[&new_c].blockage.contains(&new_d) {
                     continue;
                 }
 
-                if self.tiles.contains_key(&new_c) && self.tiles[&new_c].choice && !self.tiles[&new_c].directions.contains(&new_d) {
+                if self.tiles.contains_key(&new_c)
+                    && self.tiles[&new_c].choice
+                    && !self.tiles[&new_c].directions.contains(&new_d)
+                {
                     continue;
                 }
 
                 if self.tiles.contains_key(&new_c) && self.tiles[&new_c].oneway {
-                    continue;
+                    if !self.tiles[&new_c].directions.contains(&new_d) {
+                        continue;
+                    }
                 }
 
-                // if self.tiles.contains_key(&new_c) && self.tiles[&new_c].forced.contains_key(&c) && !self.tiles[&c].forced.contains_key(&new_c) {
-                //     continue;
-                // }
+                if self.tiles.contains_key(&new_c)
+                    && self.tiles[&new_c].forced.contains_key(&c)
+                    && !self.tiles[&c].forced.contains_key(&new_c)
+                {
+                    continue;
+                }
 
                 // TODO: handle forced
                 // if self.tiles[&c].forced && !self.tiles[&c].directions.contains(&new_d) {
                 //     continue;
                 // }
 
-                stk.push(((new_c, new_d), (c, d), index - 1));
+                stk.push(((new_c, new_d), bredth+1));
             }
         }
 
-        // for (sc, sd) in &visit_order {
-        //    println!("COORD ({:?},{:?})", sc.x(), sc.y());
-        // }
-        // panic!();
-
         for (c, _t) in &self.tiles {
             let mut dirs = vec![];
-            for (sc, sd) in &visit_order {
-                if *c == *sc {
-                    dirs.push(*sd);
+            for ((sc, sd), bredth) in &visit_order {
+                if *c == *sc && *bredth != -1 {
+                    dirs.push((*bredth, *sd));
                 }
             }
-            shortest_dist_map.insert(*c, dirs);
+            dirs.shuffle(&mut rand::rng());
+            dirs.sort_by(|x,y| x.0.cmp(&y.0));
+            shortest_dist_map.insert(*c, dirs.iter().map(|x| x.1).collect());
         }
 
         shortest_dist_map
@@ -256,7 +265,8 @@ pub struct GameState<'a> {
     pub player_index: usize,
     pub rolling: bool,
     pub blockages: Vec<Coord>,
-    pub shortest_dist_map: BTreeMap<Coord, Vec<Direction>>,
+    pub shortest_dist_map_mid: BTreeMap<Coord, Vec<Direction>>,
+    pub shortest_dist_map_goal: BTreeMap<Coord, Vec<Direction>>,
 
     pub start: Coord,
     pub scale: f64,
@@ -266,12 +276,12 @@ pub struct GameState<'a> {
     pub simulate: Option<u64>,
 }
 
-pub struct BestStepStategy<'a> {
+pub struct BestStepStrategy<'a> {
     pub blockages: &'a Vec<Coord>,
     pub shortest_dist_map: &'a BTreeMap<Coord, Vec<Direction>>,
 }
 
-impl<'a> StepStrategy for BestStepStategy<'a> {
+impl<'a> StepStrategy for BestStepStrategy<'a> {
     fn step_strategy(&mut self, player: &Player, turns: &Vec<Turn>, tile: &Tile) -> Option<Turn> {
         let dir: Direction = player.direction;
         let pos: Coord = player.position;
@@ -299,7 +309,11 @@ impl<'a> StepStrategy for BestStepStategy<'a> {
             }
         } else {
             if tile.choice {
-                *turns.choose(&mut rand::rng()).unwrap()
+                if turns.is_empty() {
+                    Turn::Straight // Falls off choice (invalid choice dir)
+                } else {
+                    *turns.choose(&mut rand::rng()).unwrap()
+                }
             } else {
                 best_dirs[0]
             }
@@ -427,12 +441,18 @@ impl<'a> StepStrategy for ManualStepStrategy<'a> {
 }
 
 impl<'a> GameState<'a> {
-    pub fn new(map: HexMap, player_strategies: Vec<(PlayerGearStrategy, PlayerStepStrategy)>, scale: f64, start: Coord) {
+    pub fn new(
+        map: HexMap,
+        player_strategies: Vec<(PlayerGearStrategy, PlayerStepStrategy)>,
+        scale: f64,
+        start: Coord,
+    ) {
         let players = map.player_builder.clone().all_players();
         let player_index = 0;
         let rolling = true;
         let blockages = vec![];
-        let shortest_dist_map = BTreeMap::new();
+        let shortest_dist_map_mid = BTreeMap::new();
+        let shortest_dist_map_goal = BTreeMap::new();
 
         let sdl_context = sdl2::init().unwrap();
         let video_subsystem = sdl_context.video().unwrap();
@@ -468,13 +488,14 @@ impl<'a> GameState<'a> {
             player_index,
             rolling,
             blockages,
-            shortest_dist_map,
+            shortest_dist_map_mid,
+            shortest_dist_map_goal,
             start,
             scale,
             canvas: &mut canvas,
             choice_tile_selections: BTreeMap::new(),
             player_strategies,
-            simulate: None, // Some(2000),
+            simulate: Some(2000), // None,
         };
 
         game_state.display(&mut event_pump);
@@ -486,7 +507,9 @@ impl<'a> GameState<'a> {
         let mut blockages = vec![];
         for p in &self.players {
             if player_positions.contains(&p.position)
-                || self.map.tiles.contains_key(&p.position) && self.map.tiles[&p.position].chikane && p.turned_over
+                || self.map.tiles.contains_key(&p.position)
+                    && self.map.tiles[&p.position].chikane
+                    && p.turned_over
             {
                 blockages.push(p.position);
             }
@@ -528,9 +551,9 @@ impl<'a> GameState<'a> {
 
                 match step_strat {
                     PlayerStepStrategy::Best => {
-                        let mut strategy = BestStepStategy {
+                        let mut strategy = BestStepStrategy {
                             blockages: &self.blockages,
-                            shortest_dist_map: &self.shortest_dist_map,
+                            shortest_dist_map: (if self.players[self.player_index].first_half {&self.shortest_dist_map_mid } else {&self.shortest_dist_map_goal}),
                         };
                         self.players[self.player_index].step(
                             &turns,
@@ -626,20 +649,39 @@ impl<'a> GameState<'a> {
                 {
                     let player_pos = self.players[self.player_index].position;
 
-                    if self.map.tiles[&player_pos].blue
-                    {
+                    if self.map.tiles[&player_pos].blue {
                         self.players[self.player_index].forced_gear_down = true;
                     }
 
-                    if self.map.tiles[&player_pos].rotate
-                    {
-                        self.players[self.player_index].direction = *vec![Direction::U,Direction::UR,Direction::DR,Direction::UL,Direction::DL,Direction::D].choose(&mut rand::rng()).unwrap();
+                    if self.map.tiles[&player_pos].rotate {
+                        self.players[self.player_index].direction = *vec![
+                            Direction::U,
+                            Direction::UR,
+                            Direction::DR,
+                            Direction::UL,
+                            Direction::DL,
+                            Direction::D,
+                        ]
+                        .choose(&mut rand::rng())
+                        .unwrap();
                     }
 
-                    if self.map.tiles[&player_pos].chikane
-                    {
-                        println!("Number of players at {:?} is {:?}", player_pos, self.players.iter().filter(|x| x.position == player_pos).count());
-                        if self.players.iter().filter(|x| x.position == player_pos).count() == 1 {
+                    if self.map.tiles[&player_pos].chikane {
+                        println!(
+                            "Number of players at {:?} is {:?}",
+                            player_pos,
+                            self.players
+                                .iter()
+                                .filter(|x| x.position == player_pos)
+                                .count()
+                        );
+                        if self
+                            .players
+                            .iter()
+                            .filter(|x| x.position == player_pos)
+                            .count()
+                            == 1
+                        {
                             self.players[self.player_index].turned_over = true;
                         }
                     }
@@ -647,12 +689,13 @@ impl<'a> GameState<'a> {
                     let player_dir = self.players[self.player_index].direction;
                     let bonked_pos = player_pos + player_dir.to_coord();
 
-                    if self.players[self.player_index].bonked &&
-                        self.map.tiles.contains_key(&bonked_pos) &&
-                        self.map.tiles[&bonked_pos].chikane
+                    if self.players[self.player_index].bonked
+                        && self.map.tiles.contains_key(&bonked_pos)
+                        && self.map.tiles[&bonked_pos].chikane
                     {
                         // Flip player over after bonking
-                        for p in self.players.iter_mut().filter(|x| x.position == bonked_pos) { // TODO: Should be able to use `.find().unwrap()` instead
+                        for p in self.players.iter_mut().filter(|x| x.position == bonked_pos) {
+                            // TODO: Should be able to use `.find().unwrap()` instead
                             p.turned_over = false;
                         }
                     }
@@ -661,6 +704,8 @@ impl<'a> GameState<'a> {
                 self.rolling = true;
                 self.player_index = (self.player_index + 1) % self.players.len();
                 self.blockages = self.update_gameboard();
+                self.shortest_dist_map_goal = self.map.shortest_path(&self.map.start_line.clone());
+                self.shortest_dist_map_mid = self.map.shortest_path(&self.map.mid_line.clone());
 
                 println!("\nPlayer {}'s turn", self.player_index);
 
@@ -683,7 +728,8 @@ impl<'a> GameState<'a> {
 
     pub fn display(&mut self, event_pump: &mut EventPump) {
         self.blockages = self.update_gameboard();
-        self.shortest_dist_map = self.map.shortest_path();
+        self.shortest_dist_map_goal = self.map.shortest_path(&self.map.start_line.clone());
+        self.shortest_dist_map_mid = self.map.shortest_path(&self.map.mid_line.clone());
 
         self.render();
         if self.simulate.is_some() {

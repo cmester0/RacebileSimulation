@@ -118,23 +118,23 @@ pub fn random_direction() -> HexMap {
     HexMap {
         tiles: BTreeMap::from([
             // Start
-            (Coord::tri(-1,-3,0), Tile::new(vec![D,DR]).start()),
-            (Coord::tri(0,-3,0), Tile::new(vec![D,DL]).start()),
-            (Coord::tri(-1,-2,0), Tile::new(vec![D,DR]).start()),
-            (Coord::tri(0,-2,0), Tile::new(vec![D,DL]).start()),
-            (Coord::tri(-1,-1,0), Tile::new(vec![D,DR]).start()),
-            (Coord::tri(0,-1,0), Tile::new(vec![D,DL]).start()),
-            (Coord::tri(-1,0,0), Tile::new(vec![D,DR]).start()),
-            (Coord::tri(0,0,0), Tile::new(vec![D,DL]).start()),
+            (Coord::tri(-1,-3,0), Tile::new(vec![D,DR,UR]).start()),
+            (Coord::tri(0,-3,0), Tile::new(vec![D,DL,U]).start()),
+            (Coord::tri(-1,-2,0), Tile::new(vec![D,DR,U,UR]).start()),
+            (Coord::tri(0,-2,0), Tile::new(vec![D,DL,U,UL]).start()),
+            (Coord::tri(-1,-1,0), Tile::new(vec![D,DR,U,UR]).start()),
+            (Coord::tri(0,-1,0), Tile::new(vec![D,DL,U,UL]).start()),
+            (Coord::tri(-1,0,0), Tile::new(vec![D,DR,U,UR]).start()),
+            (Coord::tri(0,0,0), Tile::new(vec![D,DL,U,UL]).start()),
 
             // Board
-            (Coord::tri(-1,1,0), Tile::new(vec![D,DR])),
-            (Coord::tri(0,1,0), Tile::new(vec![D,DR])),
-            (Coord::tri(-1,2,0), Tile::new(vec![DR])),
-            (Coord::tri(0,2,0), Tile::new(vec![DR,UR])),
-            (Coord::tri(1,1,0), Tile::new(vec![DR])),
-            (Coord::tri(1,2,0), Tile::new(vec![UR])),
-            (Coord::tri(2,1,0), Tile::new(vec![UR]).chikane().blockage(vec![DR])),
+            (Coord::tri(-1,1,0), Tile::new(vec![D,DR,U,UR])),
+            (Coord::tri(0,1,0), Tile::new(vec![D,DR,U,UL])),
+            (Coord::tri(-1,2,0), Tile::new(vec![DR,U])),
+            (Coord::tri(0,2,0), Tile::new(vec![DR,UR,UL,U])),
+            (Coord::tri(1,1,0), Tile::new(vec![DR,UL,DL])),
+            (Coord::tri(1,2,0), Tile::new(vec![UR,UL])),
+            (Coord::tri(2,1,0), Tile::new(vec![UR,UL,DL]).chikane().blockage(vec![DR])),
             (Coord::tri(2,1,-1), Tile::new(vec![U])),
 
             // Loop
@@ -149,14 +149,14 @@ pub fn random_direction() -> HexMap {
                 (Coord::tri(2,0,-2), UR),
             ]))),
             (Coord::tri(2,0,-4), Tile::new(vec![U]).blockage(vec![UR])),
-            (Coord::tri(2,-1,-4), Tile::new(vec![U,UL])),
-            (Coord::tri(2,-2,-4), Tile::new(vec![UL])),
-            (Coord::tri(1,-1,-4), Tile::new(vec![U,UL]).blue()),
-            (Coord::tri(1,-2,-4), Tile::new(vec![DL,UL]).rotate()),
-            (Coord::tri(0,-1,-4), Tile::new(vec![UL,DL]).blue()),
-            (Coord::tri(0,-2,-4), Tile::new(vec![DL]).chikane()),
+            (Coord::tri(2,-1,-4), Tile::new(vec![U,UL,DR])),
+            (Coord::tri(2,-2,-4), Tile::new(vec![UL,D])),
+            (Coord::tri(1,-1,-4), Tile::new(vec![U,UL,DR]).blue()),
+            (Coord::tri(1,-2,-4), Tile::new(vec![DL,UL,DR,D]).rotate()),
+            (Coord::tri(0,-1,-4), Tile::new(vec![UL,DL,DR,UR]).blue()),
+            (Coord::tri(0,-2,-4), Tile::new(vec![DL,DR]).chikane()),
             (Coord::tri(0,-1,-3), Tile::new(vec![DL]).blue()),
-            (Coord::tri(0,-2,-3), Tile::new(vec![D,DL]).rotate()),
+            (Coord::tri(0,-2,-3), Tile::new(vec![D,DL,DR,UR]).rotate()),
             (Coord::tri(0,-1,-2), Tile::new(vec![D])),
             (Coord::tri(0,-2,-2), Tile::new(vec![D])),
             (Coord::tri(0,0,-2), Tile::new(vec![DR])),
@@ -173,33 +173,33 @@ pub fn random_direction() -> HexMap {
             (Coord::tri(4,0,-5), Tile::new(vec![DR,UL]).chikane().blockage(vec![UR])),
 
             // Oneway
-            (Coord::tri(3,0,-5), Tile::new(vec![UL]).oneway()),
-            (Coord::tri(2,0,-5), Tile::new(vec![UL,DL]).oneway()),
+            (Coord::tri(3,0,-5), Tile::new(vec![UL,DR]).oneway()),
+            (Coord::tri(2,0,-5), Tile::new(vec![UL,DR]).oneway()),
 
-            (Coord::tri(5,0,-5), Tile::new(vec![D])),
-            (Coord::tri(5,1,-5), Tile::new(vec![DL]).chikane()),
-            (Coord::tri(5,1,-4), Tile::new(vec![DL]).blockage(vec![D])),
-            (Coord::tri(5,1,-3), Tile::new(vec![DL]).rotate()),
+            (Coord::tri(5,0,-5), Tile::new(vec![D,UL,U])),
+            (Coord::tri(5,1,-5), Tile::new(vec![DL,U]).chikane()),
+            (Coord::tri(5,1,-4), Tile::new(vec![DL,UR]).blockage(vec![D])),
+            (Coord::tri(5,1,-3), Tile::new(vec![DL,UR,D,DR]).rotate()),
             (Coord::tri(5,1,-2), Tile::new(vec![DL])),
 
             // loop
-            (Coord::tri(5,1,-1), Tile::new(vec![UL]).forced(BTreeMap::from([
-                (Coord::tri(5,1,-2), UL)
+            (Coord::tri(5,1,-1), Tile::new(vec![UL,UR]).forced(BTreeMap::from([
+                (Coord::tri(5,1,-2), UL),
             ]))),
             (Coord::tri(4,1,-1), Tile::new(vec![DL])),
             (Coord::tri(4,1,0), Tile::new(vec![D,UL]).chikane()),
 
             // oneway
-            (Coord::tri(3,1,0), Tile::new(vec![UL]).oneway()),
+            (Coord::tri(3,1,0), Tile::new(vec![UL,DR,U]).oneway()),
 
             // rest of loop
-            (Coord::tri(4,2,0), Tile::new(vec![DR])),
-            (Coord::tri(5,2,0), Tile::new(vec![DR,UR])),
+            (Coord::tri(4,2,0), Tile::new(vec![DR,U])),
+            (Coord::tri(5,2,0), Tile::new(vec![DR,UR,UL])),
 
-            (Coord::tri(5,2,-1), Tile::new(vec![DR])),
-            (Coord::tri(6,2,0), Tile::new(vec![DR,UR])),
-            (Coord::tri(6,2,-1), Tile::new(vec![DR,D])),
-            (Coord::tri(7,2,0), Tile::new(vec![DR,UR]).rotate()),
+            (Coord::tri(5,2,-1), Tile::new(vec![DR,U,DL])),
+            (Coord::tri(6,2,0), Tile::new(vec![DR,UR,U,UL])),
+            (Coord::tri(6,2,-1), Tile::new(vec![DR,D,UL])),
+            (Coord::tri(7,2,0), Tile::new(vec![DR,UR,U,UL]).rotate()),
             (Coord::tri(7,2,-1), Tile::new(vec![DR,D]).chikane()),
             (Coord::tri(8,2,0), Tile::new(vec![DR,UR]).blue()),
             (Coord::tri(8,2,-1), Tile::new(vec![UR,DR])),
@@ -209,7 +209,7 @@ pub fn random_direction() -> HexMap {
             // Choice wall
             (Coord::tri(9,1,-1), Tile::new(vec![U,UR]).choice()),
             (Coord::tri(9,1,-2), Tile::new(vec![U])),
-            (Coord::tri(9,0,-1), Tile::new(vec![UR])),
+            (Coord::tri(9,0,-1), Tile::new(vec![UR,U])),
 
             (Coord::tri(9,0,-2), Tile::new(vec![U,UR]).choice()),
             (Coord::tri(9,0,-3), Tile::new(vec![U])),
@@ -221,50 +221,50 @@ pub fn random_direction() -> HexMap {
 
             (Coord::tri(9,-2,-4), Tile::new(vec![U,UR]).choice()),
             (Coord::tri(9,-2,-5), Tile::new(vec![U])),
-            (Coord::tri(9,-3,-4), Tile::new(vec![UR,U,UL])),
+            (Coord::tri(9,-3,-4), Tile::new(vec![U,UL])),
 
             // oneway and connection
-            (Coord::tri(9,-1,-1), Tile::new(vec![UL]).oneway()),
-            (Coord::tri(8,-1,-1), Tile::new(vec![UL,U,DL])),
-            (Coord::tri(8,-1,0), Tile::new(vec![UL,U]).rotate()),
+            (Coord::tri(9,-1,-1), Tile::new(vec![UL,DR]).oneway()),
+            (Coord::tri(8,-1,-1), Tile::new(vec![UL,U,DL,DR])),
+            (Coord::tri(8,-1,0), Tile::new(vec![UL,U,UR]).rotate()),
 
             // wrap arround
             (Coord::tri(9,-3,-5), Tile::new(vec![UL])),
             (Coord::tri(8,-3,-5), Tile::new(vec![UL,DL])),
             (Coord::tri(8,-3,-4), Tile::new(vec![UL,U])),
             (Coord::tri(8,-3,-4), Tile::new(vec![UL,D,U])),
-            (Coord::tri(8,-2,-4), Tile::new(vec![D])),
+            (Coord::tri(8,-2,-4), Tile::new(vec![DR])),
 
             // Continue
-            (Coord::tri(7,-3,-5), Tile::new(vec![UL,DL])),
+            (Coord::tri(7,-3,-5), Tile::new(vec![UL,DL,D])),
 
             // oneway
-            (Coord::tri(7,-3,-4), Tile::new(vec![DL]).oneway()),
-            (Coord::tri(7,-3,-3), Tile::new(vec![DL,D]).oneway()),
+            (Coord::tri(7,-3,-4), Tile::new(vec![DL,U,DR]).oneway()),
+            (Coord::tri(7,-3,-3), Tile::new(vec![DL,D,UR]).oneway()),
 
             // Continue
-            (Coord::tri(6,-3,-5), Tile::new(vec![UL]).rotate()),
-            (Coord::tri(5,-3,-5), Tile::new(vec![UL]).blue()),
-            (Coord::tri(4,-3,-5), Tile::new(vec![UL])),
-            (Coord::tri(3,-3,-5), Tile::new(vec![UL])),
-            (Coord::tri(2,-3,-5), Tile::new(vec![UL]).rotate()),
-            (Coord::tri(1,-3,-5), Tile::new(vec![UL]).chikane()),
-            (Coord::tri(0,-3,-5), Tile::new(vec![UL])),
-            (Coord::tri(-1,-3,-5), Tile::new(vec![UL]).blockage(vec![DL])),
-            (Coord::tri(-2,-3,-5), Tile::new(vec![UL,DL]).blue()),
-            (Coord::tri(-3,-3,-5), Tile::new(vec![DL]).blue()),
+            (Coord::tri(6,-3,-5), Tile::new(vec![UL,DR,D]).rotate()),
+            (Coord::tri(5,-3,-5), Tile::new(vec![UL,DR]).blue()),
+            (Coord::tri(4,-3,-5), Tile::new(vec![UL,DR])),
+            (Coord::tri(3,-3,-5), Tile::new(vec![UL,DR])),
+            (Coord::tri(2,-3,-5), Tile::new(vec![UL,DR]).rotate()),
+            (Coord::tri(1,-3,-5), Tile::new(vec![UL,DR]).chikane()),
+            (Coord::tri(0,-3,-5), Tile::new(vec![UL,DR])),
+            (Coord::tri(-1,-3,-5), Tile::new(vec![UL,DR]).blockage(vec![DL])),
+            (Coord::tri(-2,-3,-5), Tile::new(vec![UL,DL,DR]).blue()),
+            (Coord::tri(-3,-3,-5), Tile::new(vec![DL,DR]).blue()),
 
-            (Coord::tri(-2,-2,-5), Tile::new(vec![DL])),
-            (Coord::tri(-3,-2,-5), Tile::new(vec![DL,D])),
-            (Coord::tri(-4,-2,-5), Tile::new(vec![D]).blue()),
+            (Coord::tri(-2,-2,-5), Tile::new(vec![DL,UR])),
+            (Coord::tri(-3,-2,-5), Tile::new(vec![DL,D,UR,DR])),
+            (Coord::tri(-4,-2,-5), Tile::new(vec![D,UR]).blue()),
 
-            (Coord::tri(-2,-2,-4), Tile::new(vec![UL,DL])),
-            (Coord::tri(-3,-2,-4), Tile::new(vec![DL,D])),
+            (Coord::tri(-2,-2,-4), Tile::new(vec![UL,DL,U,UR])),
+            (Coord::tri(-3,-2,-4), Tile::new(vec![DL,D,U,UR,DR])),
 
-            (Coord::tri(-2,-2,-3), Tile::new(vec![DL]).rotate()),
-            (Coord::tri(-3,-2,-3), Tile::new(vec![D]).rotate()),
+            (Coord::tri(-2,-2,-3), Tile::new(vec![DL,U,UL,UR]).rotate()),
+            (Coord::tri(-3,-2,-3), Tile::new(vec![D,UR,DR]).rotate()),
 
-            (Coord::tri(-2,-2,-2), Tile::new(vec![DL,D]).chikane()),
+            (Coord::tri(-2,-2,-2), Tile::new(vec![DL,D,U,UR]).chikane()),
 
         ]),
         start_line: vec![

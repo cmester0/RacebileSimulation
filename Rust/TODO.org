@@ -1,0 +1,2 @@
+Use 'emscripten' (e.g. https://blog.fazibear.me/definitive-guide-to-rust-sdl2-and-emscriptem/) to render
+to the web browser
